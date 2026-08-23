@@ -142,3 +142,8 @@ def forbidden(
 def not_found(message: str = "Not found", **extensions: typing.Any) -> GraphQLError:
     """The named object does not exist, or is not visible to this caller."""
     return GraphQLError(message, code=ErrorCode.NOT_FOUND, extensions=extensions)
+
+
+def bad_input(message: str, **extensions: typing.Any) -> GraphQLError:
+    """The arguments parsed, and mean something the resolver cannot accept."""
+    return GraphQLError(message, code=ErrorCode.BAD_USER_INPUT, extensions=extensions)
