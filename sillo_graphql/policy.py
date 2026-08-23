@@ -226,3 +226,35 @@ class Uploads:
             elif media == allowed:
                 return True
         return False
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Persisted:
+    """Persisted operations: APQ, and the stronger trusted-document mode.
+
+    Attributes:
+        apq: Automatic persisted queries. A client sends a hash; on a miss it
+            is told to send the document once, and the hash works from then
+            on. Saves bandwidth, and nothing else — any document is still
+            accepted.
+        trusted: Path to a manifest of allowed documents, keyed by hash. When
+            set, *only* those documents execute and arbitrary queries are
+            refused. This is what makes a public endpoint's workload finite,
+            and it is what makes GET responses safe to cache.
+        cache: Name of the ``sillo.cache`` store holding APQ entries.
+        ttl: Seconds an APQ entry is kept.
+    """
+
+    apq: bool = False
+    trusted: str | dict[str, str] | None = None
+    cache: str | None = None
+    ttl: int = 60 * 60 * 24
+
+    def __post_init__(self) -> None:
+        if self.ttl < 1:
+            raise ValueError("Persisted.ttl must be at least 1 second")
+
+    @property
+    def enabled(self) -> bool:
+        """Whether either mode is in use."""
+        return self.apq or self.trusted is not None
