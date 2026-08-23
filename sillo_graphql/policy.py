@@ -258,3 +258,34 @@ class Persisted:
     def enabled(self) -> bool:
         """Whether either mode is in use."""
         return self.apq or self.trusted is not None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class IDE:
+    """The in-browser explorer.
+
+    Off by default. The previous integration served it at the production URL
+    unless you remembered to say otherwise, which is the wrong way round for
+    something that also advertises the schema.
+
+    Attributes:
+        enabled: Whether ``GET`` on an HTML request serves the explorer.
+        title: Browser tab title.
+        default_query: Prefilled document.
+        assets: ``"bundled"`` serves the copy shipped with this package, so
+            the page works offline and under a strict CSP. ``"cdn"`` loads it
+            from unpkg with subresource integrity.
+        subscriptions: Point the explorer at the WebSocket endpoint. Set
+            automatically from whether subscriptions are actually mounted, so
+            the page cannot advertise a socket that is not there.
+    """
+
+    enabled: bool = False
+    title: str = "GraphQL"
+    default_query: str = ""
+    assets: typing.Literal["bundled", "cdn"] = "bundled"
+    subscriptions: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.assets not in ("bundled", "cdn"):
+            raise ValueError("IDE.assets must be 'bundled' or 'cdn'")
