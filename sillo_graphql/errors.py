@@ -137,3 +137,8 @@ def forbidden(
         status_code=403,
         extensions=extensions,
     )
+
+
+def not_found(message: str = "Not found", **extensions: typing.Any) -> GraphQLError:
+    """The named object does not exist, or is not visible to this caller."""
+    return GraphQLError(message, code=ErrorCode.NOT_FOUND, extensions=extensions)
