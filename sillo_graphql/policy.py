@@ -101,3 +101,30 @@ class Limits:
             breadth=10_000,
             max_tokens=1_000_000,
         )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ErrorPolicy:
+    """What a client is told when something goes wrong.
+
+    Attributes:
+        mask: Replace unexpected exceptions with ``mask_message``. Errors
+            raised through :mod:`sillo_graphql.errors` are deliberate and pass
+            through regardless — masking those would hide "not found" behind
+            "unexpected error" and make the API unusable.
+        mask_message: What a masked error says.
+        include_stacktrace: Attach the traceback to ``extensions.stacktrace``.
+            Development only; the guard is that it is off here and ``Graph``
+            only turns it on when the application is in debug.
+        correlation_key: Extension key carrying the request id, so a client
+            report maps to a log line. ``None`` omits it.
+        log_masked: Log the original exception when one is masked. Off means
+            the failure is invisible in both directions, which is worse than
+            noisy.
+    """
+
+    mask: bool = True
+    mask_message: str = "Unexpected error"
+    include_stacktrace: bool = False
+    correlation_key: str | None = "requestId"
+    log_masked: bool = True
