@@ -147,3 +147,8 @@ def not_found(message: str = "Not found", **extensions: typing.Any) -> GraphQLEr
 def bad_input(message: str, **extensions: typing.Any) -> GraphQLError:
     """The arguments parsed, and mean something the resolver cannot accept."""
     return GraphQLError(message, code=ErrorCode.BAD_USER_INPUT, extensions=extensions)
+
+
+def conflict(message: str, **extensions: typing.Any) -> GraphQLError:
+    """The write lost a race, or would break an invariant."""
+    return GraphQLError(message, code=ErrorCode.CONFLICT, extensions=extensions)
