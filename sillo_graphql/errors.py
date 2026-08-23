@@ -56,3 +56,39 @@ class ErrorCode:
     PERSISTED_QUERY_NOT_FOUND = "PERSISTED_QUERY_NOT_FOUND"
     PERSISTED_QUERY_NOT_SUPPORTED = "PERSISTED_QUERY_NOT_SUPPORTED"
     OPERATION_NOT_PERMITTED = "OPERATION_NOT_PERMITTED"
+
+
+class GraphQLError(SilloGraphQLError):
+    """An error a resolver means the client to see.
+
+    Errors of this class are never masked: raising one is a deliberate
+    statement about what went wrong, unlike a ``KeyError`` escaping a
+    resolver. See :class:`sillo_graphql.policy.ErrorPolicy`.
+
+    Args:
+        message: What the client is shown.
+        code: One of :class:`ErrorCode`, written to ``extensions.code``.
+        extensions: Extra keys merged into the error's ``extensions``.
+    """
+
+    #: Errors raised deliberately are shown; unexpected ones are masked.
+    expected = True
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = ErrorCode.INTERNAL_SERVER_ERROR,
+        extensions: dict[str, typing.Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.extensions = dict(extensions or {})
+
+    def as_extensions(self) -> dict[str, typing.Any]:
+        """The ``extensions`` object for this error, code included."""
+        return {"code": self.code, **self.extensions}
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.message!r}, code={self.code!r})"
