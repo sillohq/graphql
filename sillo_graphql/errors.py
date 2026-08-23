@@ -166,3 +166,12 @@ def too_many_requests(
     return GraphQLError(
         message, code=ErrorCode.TOO_MANY_REQUESTS, extensions=extensions
     )
+
+
+def internal(
+    message: str = "Internal server error", **extensions: typing.Any
+) -> GraphQLError:
+    """Something broke, and the client is owed an answer rather than a hang."""
+    return GraphQLError(
+        message, code=ErrorCode.INTERNAL_SERVER_ERROR, extensions=extensions
+    )
