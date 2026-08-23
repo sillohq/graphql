@@ -39,3 +39,7 @@ V = typing.TypeVar("V")
 BatchFn = typing.Callable[
     [list[typing.Any]], typing.Awaitable[typing.Sequence[typing.Any]]
 ]
+
+
+class LoaderError(SilloGraphQLError):
+    """A batch function broke its contract."""
