@@ -124,3 +124,16 @@ def unauthenticated(
         status_code=401,
         extensions=extensions,
     )
+
+
+def forbidden(
+    message: str = "Not permitted",
+    **extensions: typing.Any,
+) -> GraphQLDenied:
+    """The caller has an identity, and it is not allowed. Answers 403."""
+    return GraphQLDenied(
+        message,
+        code=ErrorCode.FORBIDDEN,
+        status_code=403,
+        extensions=extensions,
+    )
