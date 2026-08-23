@@ -144,3 +144,77 @@ class _Batch:
                 future.set_exception(value)
             else:
                 future.set_result(value)
+
+
+class Loader(typing.Generic[K, V]):
+    """A batch function, plus the per-operation plumbing around it.
+
+    Instances are callable: ``await load_author(1)``. They are created by the
+    :func:`loader` decorator or by ``@graph.loader``, and are safe to define
+    at module scope — no request state lives on them.
+
+    Attributes:
+        name: Used in error messages; defaults to the function's name.
+        max_batch_size: Largest number of keys handed over at once. ``None``
+            passes the whole batch, which is right until a database refuses a
+            ten-thousand-item ``IN`` clause.
+        cache: Whether repeated keys within one operation are answered once.
+    """
+
+    def __init__(
+        self,
+        batch_fn: BatchFn,
+        *,
+        name: str | None = None,
+        max_batch_size: int | None = None,
+        cache: bool = True,
+    ) -> None:
+        if max_batch_size is not None and max_batch_size < 1:
+            raise ValueError("max_batch_size must be at least 1, or None")
+        self.batch_fn = batch_fn
+        self.name = name or getattr(batch_fn, "__name__", "loader")
+        self.max_batch_size = max_batch_size
+        self.cache = cache
+        self.__doc__ = getattr(batch_fn, "__doc__", None)
+        # Strong references to in-flight dispatches. Without these the event
+        # loop may collect a task nobody is awaiting, and the futures it was
+        # going to resolve hang forever.
+        self._tasks: set[asyncio.Task] = set()
+
+    def _batch(self) -> _Batch:
+        from sillo_graphql.context import current_context
+
+        try:
+            context = current_context.get()
+        except LookupError:
+            raise LoaderError(
+                f"{self.name} was called outside a GraphQL operation. Loaders "
+                f"batch per request, so they need one to belong to; in a test, "
+                f"use `LoaderRegistry().scope()`."
+            ) from None
+        return context.loaders.batch(self)
+
+    async def __call__(self, key: K) -> V:
+        """Load one key."""
+        return typing.cast(V, await self._batch().load(key))
+
+    async def load(self, key: K) -> V:
+        """Load one key. The same as calling the loader."""
+        return typing.cast(V, await self._batch().load(key))
+
+    async def load_many(self, keys: typing.Iterable[K]) -> list[V]:
+        """Load several keys as one batch, in the order given."""
+        batch = self._batch()
+        futures = [batch.load(key) for key in keys]
+        return typing.cast("list[V]", await asyncio.gather(*futures))
+
+    def prime(self, key: K, value: V) -> None:
+        """Seed this operation's cache with a value already in hand."""
+        self._batch().prime(key, value)
+
+    def forget(self, key: K) -> None:
+        """Drop *key* from this operation's cache."""
+        self._batch().forget(key)
+
+    def __repr__(self) -> str:
+        return f"Loader({self.name!r})"
