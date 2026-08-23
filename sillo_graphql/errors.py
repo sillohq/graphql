@@ -92,3 +92,22 @@ class GraphQLError(SilloGraphQLError):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.message!r}, code={self.code!r})"
+
+
+class GraphQLDenied(GraphQLError):
+    """Raised when a gate refuses an operation before it executes.
+
+    Separated from :class:`GraphQLError` so a transport can answer with an
+    HTTP status — 401 or 403 — instead of a 200 carrying a field error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = ErrorCode.FORBIDDEN,
+        status_code: int = 403,
+        extensions: dict[str, typing.Any] | None = None,
+    ) -> None:
+        super().__init__(message, code=code, extensions=extensions)
+        self.status_code = status_code
