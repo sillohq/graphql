@@ -111,3 +111,16 @@ class GraphQLDenied(GraphQLError):
     ) -> None:
         super().__init__(message, code=code, extensions=extensions)
         self.status_code = status_code
+
+
+def unauthenticated(
+    message: str = "Not authenticated",
+    **extensions: typing.Any,
+) -> GraphQLDenied:
+    """The caller has no identity. Answers 401."""
+    return GraphQLDenied(
+        message,
+        code=ErrorCode.UNAUTHENTICATED,
+        status_code=401,
+        extensions=extensions,
+    )
