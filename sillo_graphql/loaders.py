@@ -218,3 +218,44 @@ class Loader(typing.Generic[K, V]):
 
     def __repr__(self) -> str:
         return f"Loader({self.name!r})"
+
+
+class LoaderRegistry:
+    """Every loader's state for one operation.
+
+    Lives on the :class:`~sillo_graphql.context.GraphContext`, is built when
+    the operation starts, and is dropped with it. Nothing is shared between
+    requests, which is the property that makes loader caching safe at all.
+    """
+
+    __slots__ = ("_batches",)
+
+    def __init__(self) -> None:
+        self._batches: dict[int, _Batch] = {}
+
+    def batch(self, loader: Loader) -> _Batch:
+        """This operation's batch for *loader*, created on first use.
+
+        Keyed by identity rather than by name, so two loaders that happen to
+        wrap functions of the same name stay apart.
+        """
+        key = id(loader)
+        batch = self._batches.get(key)
+        if batch is None:
+            batch = _Batch(loader)
+            self._batches[key] = batch
+        return batch
+
+    def scope(self) -> typing.Any:
+        """Make this registry current, for code outside an operation.
+
+        Tests and background jobs want loaders without a request::
+
+            async with LoaderRegistry().scope():
+                await load_author(1)
+        """
+        return _Scope(self)
+
+    def __len__(self) -> int:
+        """How many distinct loaders this operation has touched."""
+        return len(self._batches)
