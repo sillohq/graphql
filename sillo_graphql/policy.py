@@ -50,3 +50,54 @@ def parse_size(value: int | str) -> int:
     if unit in ("K", "M", "G"):
         unit += "B"
     return int(float(amount) * _UNITS[unit])
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Limits:
+    """How large an operation may be before it is refused.
+
+    Checked statically, before execution: a query that would be too expensive
+    is rejected without a single resolver running, which is the only point at
+    which rejecting it still saves anything.
+
+    Attributes:
+        depth: Maximum nesting. A recursive type with no depth limit is an
+            unbounded amount of work behind one small request.
+        cost: Maximum weighted complexity. ``None`` disables cost analysis
+            while leaving the structural limits in force.
+        aliases: Maximum aliases of one field. Aliasing multiplies work
+            without adding depth, so a depth limit alone does not cover it.
+        breadth: Maximum selections in any one selection set.
+        list_multiplier: Default multiplier for a list field with no explicit
+            page argument, used when costing.
+        max_tokens: Maximum document tokens, applied before parsing.
+        default_field_cost: What a field costs when nothing says otherwise.
+    """
+
+    depth: int = 10
+    cost: int | None = 1_000
+    aliases: int = 15
+    breadth: int = 100
+    list_multiplier: int = 10
+    max_tokens: int = 5_000
+    default_field_cost: int = 1
+
+    def __post_init__(self) -> None:
+        for name in ("depth", "aliases", "breadth", "list_multiplier", "max_tokens"):
+            if getattr(self, name) < 1:
+                raise ValueError(f"Limits.{name} must be at least 1")
+        if self.cost is not None and self.cost < 1:
+            raise ValueError("Limits.cost must be at least 1, or None to disable")
+        if self.default_field_cost < 0:
+            raise ValueError("Limits.default_field_cost cannot be negative")
+
+    @classmethod
+    def none(cls) -> Limits:
+        """Every limit relaxed. For a trusted internal endpoint, and only one."""
+        return cls(
+            depth=1_000,
+            cost=None,
+            aliases=1_000,
+            breadth=10_000,
+            max_tokens=1_000_000,
+        )
