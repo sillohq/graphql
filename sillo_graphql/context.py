@@ -99,3 +99,122 @@ class ResponseHandle:
             or self._cookies
             or self._deleted
         )
+
+
+class GraphContext(typing.Mapping[str, typing.Any]):
+    """The ``context_value`` every resolver is executed with.
+
+    Attributes:
+        http: The HTTP context, or ``None`` during a subscription.
+        socket: The WebSocket context, or ``None`` over HTTP.
+        response: What this operation wants done to the response.
+        loaders: The request-scoped loader registry.
+        user: The authenticated user, read from the connection.
+        extra: Whatever a ``@graph.context`` hook returned.
+        operation_name: The operation being executed, when it is named.
+    """
+
+    __slots__ = (
+        "cost",
+        "dependency_cache",
+        "extra",
+        "http",
+        "loaders",
+        "operation_name",
+        "response",
+        "socket",
+        "started",
+    )
+
+    def __init__(
+        self,
+        *,
+        http: HttpContext | None = None,
+        socket: WebSocketContext | None = None,
+        loaders: LoaderRegistry | None = None,
+        extra: dict[str, typing.Any] | None = None,
+        operation_name: str | None = None,
+    ) -> None:
+        from sillo_graphql.loaders import LoaderRegistry
+
+        self.http = http
+        self.socket = socket
+        self.response = ResponseHandle()
+        self.loaders = loaders if loaders is not None else LoaderRegistry()
+        self.extra: dict[str, typing.Any] = dict(extra or {})
+        self.operation_name = operation_name
+        #: Filled in by cost analysis, and reported in ``extensions``.
+        self.cost: int | None = None
+        #: Shared by every ``Depend`` in this operation, so two resolvers that
+        #: both ask for ``Depend(get_db)`` are handed one session rather than
+        #: opening two against the same request.
+        self.dependency_cache: dict[typing.Any, typing.Any] = {}
+        #: When this operation began, on the monotonic clock. Read by the
+        #: `on_operation` hooks, which are called after the fact and would
+        #: otherwise have nothing to measure against.
+        self.started = time.perf_counter()
+
+    @property
+    def connection(self) -> typing.Any:
+        """Whichever context this operation actually arrived on.
+
+        A resolver that only wants headers or the user does not care which
+        transport it is on, and both contexts derive from ``BaseContext``.
+        """
+        return self.http if self.http is not None else self.socket
+
+    @property
+    def user(self) -> typing.Any:
+        """The authenticated user, or ``None``.
+
+        Read through rather than copied, because authentication middleware may
+        resolve the user lazily and a snapshot taken at context-build time
+        would be ``None`` for the whole operation.
+        """
+        connection = self.connection
+        if connection is None:
+            return None
+        try:
+            return connection.user
+        except (ValueError, AttributeError):
+            # `ctx.user` raises rather than returning None when no
+            # authentication middleware is mounted. From a resolver's point of
+            # view that is the same answer — nobody is signed in — and a field
+            # gated on `auth=` should say "not authenticated", not 500.
+            return None
+
+    def __getitem__(self, key: str) -> typing.Any:
+        """Mapping access, for the ``info.context["ctx"]`` shape.
+
+        The old handler passed a bare ``{"ctx": ctx}`` dict. Supporting the
+        same subscript means a schema can migrate one resolver at a time
+        rather than all at once.
+        """
+        if key == "ctx":
+            return self.connection
+        if key in self.__slots__:
+            return getattr(self, key)
+        if key in self.extra:
+            return self.extra[key]
+        raise KeyError(key)
+
+    def _keys(self) -> list[str]:
+        """Every readable key, in order, with no repeats.
+
+        A ``Mapping`` whose ``len`` disagrees with its iteration order breaks
+        ``dict(context)``, and ``extra`` is caller-supplied — nothing stops it
+        holding a key an attribute already uses.
+        """
+        keys = ["ctx", *self.__slots__]
+        keys += [key for key in self.extra if key not in keys]
+        return keys
+
+    def __iter__(self) -> typing.Iterator[str]:
+        return iter(self._keys())
+
+    def __len__(self) -> int:
+        return len(self._keys())
+
+    def __repr__(self) -> str:
+        transport = "ws" if self.socket is not None else "http"
+        return f"GraphContext({transport}, operation={self.operation_name!r})"
