@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sillo-graphql"
+version = "0.1.0"
+description = "Production GraphQL for Sillo — sillo-style resolvers with DI, subscriptions, cost limits, persisted operations and batching."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+authors = [
+    {name = "Chidebele Dunamis", email = "techwithdunamix@gmail.com"}
+]
+keywords = [
+    "sillo", "graphql", "strawberry", "asgi", "subscriptions",
+    "dataloader", "persisted-queries", "api",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
+# Strawberry owns the schema; this package owns everything around it.
+dependencies = [
+    "sillo-framework>=0.3",
+    "strawberry-graphql>=0.219.0",
+]
+
+[project.urls]
+Homepage = "https://sillo.build"
+Documentation = "https://docs.sillo.build/packages/graphql/"
+Source = "https://github.com/sillohq/graphql"
+Changelog = "https://github.com/sillohq/graphql/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+# `sillo-stubs` serves type checkers, which never run the import hook below.
+packages = ["sillo_graphql", "sillo-stubs"]
+
+# The bootstrap and its .pth land at the site-packages root. The .pth is what
+# runs at interpreter startup and registers the `sillo.graphql` alias; see
+# _sillo_graphql_bootstrap.py for why nothing is written into `sillo/`.
+[tool.hatch.build.targets.wheel.force-include]
+"_sillo_graphql_bootstrap.py" = "_sillo_graphql_bootstrap.py"
+"sillo_graphql.pth" = "sillo_graphql.pth"
+
+# The same two files for `pip install -e .`, so the alias works in a
+# development checkout and not only from a built wheel.
+[tool.hatch.build.targets.editable.force-include]
+"_sillo_graphql_bootstrap.py" = "_sillo_graphql_bootstrap.py"
+"sillo_graphql.pth" = "sillo_graphql.pth"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning:strawberry.*"]
+
+[tool.coverage.run]
+# `_sillo_graphql_bootstrap` is deliberately not measured. Its `.pth` imports
+# it at interpreter startup, before coverage exists, so its `def` and `class`
+# statements never run under the tracer however thoroughly it is tested.
+# tests/test_alias.py covers it; the number would be an artefact of import
+# timing rather than of testing.
+source = ["sillo_graphql"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if typing.TYPE_CHECKING:",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# `Depend(...)` in a default is the framework's own convention, and the whole
+# point of the bridge under test. `pytest.raises(Exception)` is deliberate
+# where the failure is a socket close, whose type the test client chooses.
+# Strawberry types carry mutable class attributes by design.
+"tests/**" = ["B008", "B017", "RUF012"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = false
+ignore_missing_imports = true
