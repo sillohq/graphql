@@ -128,3 +128,40 @@ class ErrorPolicy:
     include_stacktrace: bool = False
     correlation_key: str | None = "requestId"
     log_masked: bool = True
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Transport:
+    """Which parts of the GraphQL-over-HTTP surface are served.
+
+    Attributes:
+        get_queries: Accept queries over ``GET``. Mutations are refused on
+            ``GET`` whatever this says — the method is meant to be safe.
+        batch: Maximum operations in a batched request; ``0`` refuses batches.
+            A batch is a work multiplier that skips per-request limits, so it
+            is capped rather than merely allowed.
+        graphql_content_type: Accept ``application/graphql`` bodies, where the
+            whole body is the document.
+        response_content_type: Answer with ``application/graphql-response+json``
+            when the client asks for it, which also selects the spec's status
+            codes rather than the legacy always-200 behaviour.
+        max_body: Largest accepted request body.
+    """
+
+    get_queries: bool = True
+    batch: int = 10
+    graphql_content_type: bool = True
+    response_content_type: bool = True
+    max_body: int | str = "1MB"
+
+    def __post_init__(self) -> None:
+        if self.batch < 0:
+            raise ValueError("Transport.batch cannot be negative")
+        # Validate eagerly, so a typo is a configuration error at import time
+        # rather than a 500 on the first large upload.
+        parse_size(self.max_body)
+
+    @property
+    def max_body_bytes(self) -> int:
+        """``max_body`` in bytes."""
+        return parse_size(self.max_body)
