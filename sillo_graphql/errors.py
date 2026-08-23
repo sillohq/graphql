@@ -27,3 +27,11 @@ __all__ = [
     "too_many_requests",
     "unauthenticated",
 ]
+
+
+class SilloGraphQLError(Exception):
+    """Base for everything this package raises.
+
+    One base means ``except SilloGraphQLError`` catches package failures
+    without also swallowing the application's own exceptions.
+    """
