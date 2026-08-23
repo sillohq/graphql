@@ -165,3 +165,64 @@ class Transport:
     def max_body_bytes(self) -> int:
         """``max_body`` in bytes."""
         return parse_size(self.max_body)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Uploads:
+    """Multipart file uploads, per the GraphQL multipart request spec.
+
+    Disabled unless ``enabled`` is set: an endpoint that accepts files has a
+    materially larger attack surface than one that does not, and that should
+    be a decision rather than a default.
+
+    Attributes:
+        enabled: Whether ``multipart/form-data`` is accepted at all.
+        max_size: Largest single file.
+        max_files: Most files in one request.
+        max_total: Largest total across all files in one request.
+        content_types: Allowed media types; ``None`` allows any. Globs of the
+            form ``image/*`` are understood.
+        storage: Name of the ``sillo.storage`` disk to stream into. ``None``
+            hands the resolver the stream and stores nothing.
+    """
+
+    enabled: bool = False
+    max_size: int | str = "10MB"
+    max_files: int = 10
+    max_total: int | str = "50MB"
+    content_types: tuple[str, ...] | None = None
+    storage: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_files < 1:
+            raise ValueError("Uploads.max_files must be at least 1")
+        parse_size(self.max_size)
+        parse_size(self.max_total)
+
+    @property
+    def max_size_bytes(self) -> int:
+        """``max_size`` in bytes."""
+        return parse_size(self.max_size)
+
+    @property
+    def max_total_bytes(self) -> int:
+        """``max_total`` in bytes."""
+        return parse_size(self.max_total)
+
+    def allows(self, content_type: str | None) -> bool:
+        """Whether a file of this media type may be accepted."""
+        if self.content_types is None:
+            return True
+        if content_type is None:
+            return False
+        # Parameters are not part of the match: `image/png; charset=binary`
+        # is an image/png.
+        media = content_type.split(";", 1)[0].strip().lower()
+        for allowed in self.content_types:
+            allowed = allowed.strip().lower()
+            if allowed.endswith("/*"):
+                if media.startswith(allowed[:-1]):
+                    return True
+            elif media == allowed:
+                return True
+        return False
