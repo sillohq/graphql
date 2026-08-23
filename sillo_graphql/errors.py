@@ -35,3 +35,24 @@ class SilloGraphQLError(Exception):
     One base means ``except SilloGraphQLError`` catches package failures
     without also swallowing the application's own exceptions.
     """
+
+
+class ErrorCode:
+    """The machine-readable values that appear in ``extensions.code``.
+
+    Plain string constants rather than an ``Enum``: they are written straight
+    into a JSON payload, compared against by clients as strings, and an enum
+    member would only have to be unwrapped again at every boundary.
+    """
+
+    UNAUTHENTICATED = "UNAUTHENTICATED"
+    FORBIDDEN = "FORBIDDEN"
+    NOT_FOUND = "NOT_FOUND"
+    BAD_USER_INPUT = "BAD_USER_INPUT"
+    CONFLICT = "CONFLICT"
+    TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
+    INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+    OPERATION_TOO_COMPLEX = "OPERATION_TOO_COMPLEX"
+    PERSISTED_QUERY_NOT_FOUND = "PERSISTED_QUERY_NOT_FOUND"
+    PERSISTED_QUERY_NOT_SUPPORTED = "PERSISTED_QUERY_NOT_SUPPORTED"
+    OPERATION_NOT_PERMITTED = "OPERATION_NOT_PERMITTED"
