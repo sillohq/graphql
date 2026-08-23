@@ -152,3 +152,17 @@ def bad_input(message: str, **extensions: typing.Any) -> GraphQLError:
 def conflict(message: str, **extensions: typing.Any) -> GraphQLError:
     """The write lost a race, or would break an invariant."""
     return GraphQLError(message, code=ErrorCode.CONFLICT, extensions=extensions)
+
+
+def too_many_requests(
+    message: str = "Rate limit exceeded",
+    *,
+    retry_after: float | None = None,
+    **extensions: typing.Any,
+) -> GraphQLError:
+    """The caller is over budget. ``retry_after`` is in seconds."""
+    if retry_after is not None:
+        extensions["retryAfter"] = retry_after
+    return GraphQLError(
+        message, code=ErrorCode.TOO_MANY_REQUESTS, extensions=extensions
+    )
