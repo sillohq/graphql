@@ -375,3 +375,29 @@ def analyze(
             fields=max(worst.fields, result.fields),
         )
     return worst
+
+
+def enforce(
+    document: DocumentNode,
+    *,
+    limits: Limits,
+    schema: GraphQLSchema | None = None,
+    operation_name: str | None = None,
+    variables: dict[str, typing.Any] | None = None,
+    costs: dict[str, int] | None = None,
+) -> Analysis:
+    """Measure a document and raise if it is over any limit.
+
+    Raises:
+        GraphQLError: with code ``OPERATION_TOO_COMPLEX``, naming the limit
+            that was passed and what it is — a client that is refused should
+            be able to fix its query without guessing.
+    """
+    return analyze(
+        document,
+        limits=limits,
+        schema=schema,
+        operation_name=operation_name,
+        variables=variables,
+        costs=costs,
+    )
