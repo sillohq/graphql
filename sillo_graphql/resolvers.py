@@ -223,3 +223,11 @@ async def _solve(
         cleanup_callbacks=cleanup,
     )
     return values, cleanup
+
+
+async def _run_cleanup(callbacks: list[typing.Callable[[], typing.Any]]) -> None:
+    """Close generator dependencies, whether they close synchronously or not."""
+    for callback in callbacks:
+        result = callback()
+        if inspect.isawaitable(result):
+            await result
