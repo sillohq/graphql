@@ -157,3 +157,59 @@ def extract_hash(payload: dict[str, typing.Any]) -> str | None:
     if isinstance(document_id, str) and document_id:
         return document_id
     return None
+
+
+async def resolve_document(
+    payload: dict[str, typing.Any],
+    *,
+    policy: Persisted,
+    store: PersistedStore,
+    trusted: TrustedDocuments | None,
+) -> str:
+    """The document this request means to execute.
+
+    Raises:
+        GraphQLError: ``PERSISTED_QUERY_NOT_FOUND`` when a hash is unknown and
+            the client should retry with the document; ``BAD_USER_INPUT`` when
+            there is neither a hash nor a document;
+            ``OPERATION_NOT_PERMITTED`` when a manifest is in force and the
+            document is not in it.
+    """
+    query = payload.get("query")
+    query = query if isinstance(query, str) else None
+    key = extract_hash(payload)
+
+    if trusted is not None:
+        return _resolve_trusted(trusted, key, query)
+
+    if key is None:
+        if query is None:
+            raise GraphQLError("No query in the request", code=ErrorCode.BAD_USER_INPUT)
+        return query
+
+    if not policy.apq:
+        raise GraphQLError(
+            "Persisted queries are not enabled on this endpoint",
+            code=ErrorCode.PERSISTED_QUERY_NOT_SUPPORTED,
+        )
+
+    if query is None:
+        stored = await store.get(key)
+        if stored is None:
+            # The client is expected to see this code, retry once with the
+            # document attached, and never send it again.
+            raise GraphQLError(
+                "PersistedQueryNotFound",
+                code=ErrorCode.PERSISTED_QUERY_NOT_FOUND,
+            )
+        return stored
+
+    # A registration. The hash is verified rather than trusted, or the store
+    # becomes a place to park arbitrary documents under a chosen key.
+    if hash_document(query) != key:
+        raise GraphQLError(
+            "provided sha256Hash does not match the query",
+            code=ErrorCode.BAD_USER_INPUT,
+        )
+    await store.set(key, query, policy.ttl)
+    return query
