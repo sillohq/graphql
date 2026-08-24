@@ -75,3 +75,10 @@ class ResolverError(SilloGraphQLError):
 def resolver_costs() -> dict[str, int]:
     """Every cost declared with ``@field(cost=...)`` so far."""
     return dict(_COSTS)
+
+
+class _Injection(typing.NamedTuple):
+    """One parameter this package fills in rather than the client."""
+
+    name: str
+    kind: str  # "ctx" | "graph" | "root" | "info" | "depend"
