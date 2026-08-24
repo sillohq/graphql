@@ -95,3 +95,44 @@ class MemoryStore:
 
     def __len__(self) -> int:
         return len(self._documents)
+
+
+class TrustedDocuments:
+    """The manifest of operations an endpoint will execute.
+
+    Built from a mapping of ``hash -> document``, or from a JSON file holding
+    one. The file form is what a build step produces, so the manifest ships
+    with the client that needs it.
+    """
+
+    def __init__(self, source: str | dict[str, str]) -> None:
+        self.source = source
+        self.documents = (
+            dict(source) if isinstance(source, dict) else self._load(source)
+        )
+
+    @staticmethod
+    def _load(path: str) -> dict[str, str]:
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"no trusted-document manifest at {path}. Generate one from "
+                f"the client's operations, or unset `Persisted.trusted`."
+            )
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"{path} should hold an object of hash -> document, not "
+                f"{type(data).__name__}"
+            )
+        return {str(key): str(value) for key, value in data.items()}
+
+    def get(self, key: str) -> str | None:
+        """The document trusted under *key*, or ``None``."""
+        return self.documents.get(key)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.documents
+
+    def __len__(self) -> int:
+        return len(self.documents)
