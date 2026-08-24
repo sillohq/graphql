@@ -82,3 +82,23 @@ class _Injection(typing.NamedTuple):
 
     name: str
     kind: str  # "ctx" | "graph" | "root" | "info" | "depend"
+
+
+def _annotation_name(annotation: typing.Any) -> str:
+    """The bare name of an annotation, however it was written.
+
+    ``HttpContext``, ``"HttpContext"``, ``sillo.core.http.HttpContext`` and
+    ``HttpContext | None`` all have to answer the same, because a resolver
+    author writes whichever of those reads best.
+    """
+    if annotation is inspect.Parameter.empty:
+        return ""
+    if isinstance(annotation, str):
+        text = annotation
+    else:
+        text = getattr(annotation, "__name__", None) or str(annotation)
+    # Strip a module path, optional wrapper and subscript: the last identifier
+    # is the one that names the type.
+    text = text.replace("Optional[", "").rstrip("]")
+    text = text.split("|")[0].strip()
+    return text.rsplit(".", 1)[-1].strip("\"' ")
