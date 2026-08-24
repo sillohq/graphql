@@ -282,3 +282,16 @@ class _Scope:
         from sillo_graphql.context import current_context
 
         current_context.reset(self._token)
+
+
+def _hashable(key: typing.Any) -> bool:
+    """Whether *key* can be a cache key.
+
+    A list of ids is a perfectly reasonable loader key and cannot be hashed;
+    such a call skips the cache rather than failing.
+    """
+    try:
+        hash(key)
+    except TypeError:
+        return False
+    return True
