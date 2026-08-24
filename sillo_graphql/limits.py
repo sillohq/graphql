@@ -45,3 +45,32 @@ __all__ = ["Analysis", "analyze", "enforce"]
 #: Arguments that name a page size. A field taking one of these is being asked
 #: for that many rows, which is a far better multiplier than a guess.
 PAGE_ARGS = ("first", "last", "limit", "take", "page_size", "pageSize")
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Analysis:
+    """What a document was measured to be.
+
+    Attributes:
+        depth: Deepest field nesting; a root field alone is depth 1.
+        cost: Weighted complexity, list multipliers applied.
+        aliases: Most aliases of any single field.
+        breadth: Largest selection set.
+        fields: Total field selections, fragments expanded.
+    """
+
+    depth: int = 0
+    cost: int = 0
+    aliases: int = 0
+    breadth: int = 0
+    fields: int = 0
+
+    def as_extensions(self) -> dict[str, int]:
+        """The shape reported under ``extensions.cost``."""
+        return {
+            "depth": self.depth,
+            "cost": self.cost,
+            "aliases": self.aliases,
+            "breadth": self.breadth,
+            "fields": self.fields,
+        }
