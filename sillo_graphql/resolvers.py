@@ -231,3 +231,99 @@ async def _run_cleanup(callbacks: list[typing.Callable[[], typing.Any]]) -> None
         result = callback()
         if inspect.isawaitable(result):
             await result
+
+
+def _build(
+    fn: typing.Callable[..., typing.Any],
+    *,
+    is_generator: bool,
+    auth: typing.Any = None,
+) -> typing.Callable[..., typing.Any]:
+    """Wrap *fn* in something Strawberry can read arguments off."""
+    injections, exposed, depends = _split(fn)
+    dependant = None
+    if depends:
+        from sillo.core.dependencies.base import get_dependant
+
+        dependant = _shared(get_dependant(_carrier(depends)))
+
+    parameters = [
+        inspect.Parameter("root", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        inspect.Parameter(
+            "info", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=strawberry.Info
+        ),
+        # Keyword-only, so a default on one exposed argument cannot force
+        # defaults on the ones after it.
+        *(
+            parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
+            for parameter in exposed
+        ),
+    ]
+    signature = inspect.Signature(
+        parameters, return_annotation=inspect.signature(fn).return_annotation
+    )
+    annotations = {"info": strawberry.Info}
+    annotations.update({p.name: p.annotation for p in exposed})
+    hints = getattr(fn, "__annotations__", {})
+    if "return" in hints:
+        annotations["return"] = hints["return"]
+
+    async def collect(
+        root: typing.Any, info: typing.Any, kwargs: dict[str, typing.Any]
+    ) -> tuple[dict[str, typing.Any], list[typing.Callable[[], typing.Any]]]:
+        """Everything the wrapped function should be called with."""
+        context = info.context
+        call: dict[str, typing.Any] = dict(kwargs)
+        cleanup: list[typing.Callable[[], typing.Any]] = []
+
+        if dependant is not None:
+            resolved, cleanup = await _solve(dependant, context)
+        else:
+            resolved = {}
+
+        for name, kind in injections:
+            if kind == "root":
+                call[name] = root
+            elif kind == "info":
+                call[name] = info
+            elif kind == "graph":
+                call[name] = context
+            elif kind == "ctx":
+                call[name] = _connection(context)
+            else:
+                call[name] = resolved.get(name)
+
+        if auth is not None:
+            await _check_auth(auth, context)
+        return call, cleanup
+
+    if is_generator:
+
+        @functools.wraps(fn)
+        async def wrapper(root: typing.Any, info: typing.Any, **kwargs: typing.Any):
+            call, cleanup = await collect(root, info, kwargs)
+            try:
+                async for item in fn(**call):
+                    yield item
+            finally:
+                # Runs on unsubscribe and on disconnect alike: a subscription
+                # that held a database session must not keep it because the
+                # client closed the tab.
+                await _run_cleanup(cleanup)
+
+    else:
+
+        @functools.wraps(fn)
+        async def wrapper(root: typing.Any, info: typing.Any, **kwargs: typing.Any):  # type: ignore[misc]
+            call, cleanup = await collect(root, info, kwargs)
+            try:
+                result = fn(**call)
+                if inspect.isawaitable(result):
+                    result = await result
+                return result
+            finally:
+                await _run_cleanup(cleanup)
+
+    wrapper.__signature__ = signature  # type: ignore[attr-defined]
+    wrapper.__annotations__ = annotations
+    return wrapper
