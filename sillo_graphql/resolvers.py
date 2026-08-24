@@ -70,3 +70,8 @@ _COSTS: dict[str, int] = {}
 
 class ResolverError(SilloGraphQLError):
     """A resolver could not be adapted."""
+
+
+def resolver_costs() -> dict[str, int]:
+    """Every cost declared with ``@field(cost=...)`` so far."""
+    return dict(_COSTS)
