@@ -66,3 +66,7 @@ CONTEXT_NAMES = frozenset({"ctx", "context"})
 #: Per-field costs registered by ``@field(cost=...)``, keyed by field name.
 #: Read by :class:`~sillo_graphql.graph.Graph` when it builds its cost table.
 _COSTS: dict[str, int] = {}
+
+
+class ResolverError(SilloGraphQLError):
+    """A resolver could not be adapted."""
