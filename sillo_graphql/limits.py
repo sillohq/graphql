@@ -334,3 +334,44 @@ def _named_type(type_: typing.Any) -> typing.Any:
     while isinstance(type_, GraphQLList | GraphQLNonNull):
         type_ = type_.of_type
     return type_
+
+
+def analyze(
+    document: DocumentNode,
+    *,
+    limits: Limits,
+    schema: GraphQLSchema | None = None,
+    operation_name: str | None = None,
+    variables: dict[str, typing.Any] | None = None,
+    costs: dict[str, int] | None = None,
+) -> Analysis:
+    """Measure a document without enforcing anything.
+
+    Every operation in the document is measured and the largest of each
+    measure returned, unless *operation_name* names one.
+
+    Passing *schema* buys accuracy: without it, every field with a selection
+    set is treated as a list, because the analyzer cannot tell.
+    """
+    analyzer = _Analyzer(
+        document, limits=limits, schema=schema, variables=variables, costs=costs
+    )
+    worst = Analysis()
+    for definition in document.definitions:
+        if not isinstance(definition, OperationDefinitionNode):
+            continue
+        if operation_name is not None and (
+            definition.name is None or definition.name.value != operation_name
+        ):
+            continue
+        analyzer.depth = analyzer.cost = 0
+        analyzer.aliases = analyzer.breadth = analyzer.fields = 0
+        result = analyzer.run(definition)
+        worst = Analysis(
+            depth=max(worst.depth, result.depth),
+            cost=max(worst.cost, result.cost),
+            aliases=max(worst.aliases, result.aliases),
+            breadth=max(worst.breadth, result.breadth),
+            fields=max(worst.fields, result.fields),
+        )
+    return worst
