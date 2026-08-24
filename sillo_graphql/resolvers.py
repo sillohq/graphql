@@ -174,3 +174,30 @@ def _carrier(depends: dict[str, typing.Any]) -> typing.Callable[..., None]:
         ]
     )
     return carry
+
+
+def _shared(dependant: typing.Any) -> typing.Any:
+    """Make every dependency in *dependant* cacheable for one operation.
+
+    The framework only assigns a cache key to a dependency that has
+    dependencies of its own, so ``Depend(get_db)`` is resolved once per
+    parameter rather than once per request. In a route that is a wart — the
+    handler is called once, so it happens at most a couple of times. In a
+    GraphQL operation it is pathological: twenty fields each declaring
+    ``Depend(get_db)`` would open twenty sessions to answer one query.
+
+    So the missing keys are filled in, and the framework's own cache — held on
+    the ``GraphContext`` and dropped with it — does the rest. Reaching into the
+    plan is private ground, hence the guard: if the shape ever changes, the
+    dependencies resolve per resolver again, which is slower and still
+    correct.
+    """
+    plan = getattr(dependant, "_execution_plan", None)
+    if plan is None:  # pragma: no cover - only if the framework's shape changes
+        return dependant
+    for step in plan:
+        sub = step.dependant
+        missing = getattr(sub, "cache_key", 0) is None
+        if missing and getattr(sub, "call", None) is not None:
+            sub.cache_key = (sub.call, ())
+    return dependant
