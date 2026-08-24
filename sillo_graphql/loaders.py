@@ -295,3 +295,29 @@ def _hashable(key: typing.Any) -> bool:
     except TypeError:
         return False
     return True
+
+
+def loader(
+    fn: BatchFn | None = None,
+    *,
+    name: str | None = None,
+    max_batch_size: int | None = None,
+    cache: bool = True,
+) -> typing.Any:
+    """Turn a batch function into a :class:`Loader`.
+
+    Usable bare or called::
+
+        @loader
+        async def load_author(keys): ...
+
+        @loader(max_batch_size=500)
+        async def load_tags(keys): ...
+    """
+    if fn is not None:
+        return Loader(fn, name=name, max_batch_size=max_batch_size, cache=cache)
+
+    def decorate(inner: BatchFn) -> Loader:
+        return Loader(inner, name=name, max_batch_size=max_batch_size, cache=cache)
+
+    return decorate
