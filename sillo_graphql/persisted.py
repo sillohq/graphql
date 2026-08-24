@@ -42,3 +42,19 @@ __all__ = [
 def hash_document(document: str) -> str:
     """The SHA-256 of a document, as the APQ protocol computes it."""
     return hashlib.sha256(document.encode("utf-8")).hexdigest()
+
+
+class PersistedStore(typing.Protocol):
+    """Where APQ documents are kept between requests.
+
+    A Protocol rather than a base class: an application that already has a
+    cache should be able to hand it over without inheriting anything.
+    """
+
+    async def get(self, key: str) -> str | None:
+        """The document stored under *key*, or ``None``."""
+        ...
+
+    async def set(self, key: str, document: str, ttl: int) -> None:
+        """Store *document* under *key* for *ttl* seconds."""
+        ...
