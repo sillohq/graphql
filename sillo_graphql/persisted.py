@@ -136,3 +136,24 @@ class TrustedDocuments:
 
     def __len__(self) -> int:
         return len(self.documents)
+
+
+def extract_hash(payload: dict[str, typing.Any]) -> str | None:
+    """The persisted-query hash in a request, if it carries one.
+
+    Two shapes are understood: the APQ extension every Apollo client sends,
+    and a bare ``documentId``, which is what the newer trusted-document
+    tooling emits.
+    """
+    extensions = payload.get("extensions")
+    if isinstance(extensions, dict):
+        persisted = extensions.get("persistedQuery")
+        if isinstance(persisted, dict):
+            value = persisted.get("sha256Hash")
+            if isinstance(value, str) and value:
+                return value
+
+    document_id = payload.get("documentId")
+    if isinstance(document_id, str) and document_id:
+        return document_id
+    return None
