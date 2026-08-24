@@ -213,3 +213,30 @@ async def resolve_document(
         )
     await store.set(key, query, policy.ttl)
     return query
+
+
+def _resolve_trusted(
+    trusted: TrustedDocuments, key: str | None, query: str | None
+) -> str:
+    """The document a manifest allows, for a hash or for a literal query."""
+    if key is not None:
+        document = trusted.get(key)
+        if document is None:
+            raise GraphQLError(
+                "Unknown persisted operation",
+                code=ErrorCode.OPERATION_NOT_PERMITTED,
+            )
+        return document
+
+    if query is None:
+        raise GraphQLError("No query in the request", code=ErrorCode.BAD_USER_INPUT)
+
+    # A literal document is allowed only if it is one of the trusted ones,
+    # matched by hash. This keeps development tooling working against a
+    # manifest-enforcing endpoint without widening what it will execute.
+    if hash_document(query) in trusted:
+        return query
+    raise GraphQLError(
+        "This endpoint only executes persisted operations",
+        code=ErrorCode.OPERATION_NOT_PERMITTED,
+    )
