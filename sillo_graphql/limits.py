@@ -320,3 +320,10 @@ class _Analyzer:
         if self.schema is None or node.type_condition is None:
             return parent
         return self.schema.get_type(node.type_condition.name.value) or parent
+
+
+def _is_list(type_: typing.Any) -> bool:
+    """Whether a field's type is a list, through any non-null wrappers."""
+    while isinstance(type_, GraphQLNonNull):
+        type_ = type_.of_type
+    return isinstance(type_, GraphQLList)
