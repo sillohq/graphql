@@ -102,3 +102,55 @@ def _annotation_name(annotation: typing.Any) -> str:
     text = text.replace("Optional[", "").rstrip("]")
     text = text.split("|")[0].strip()
     return text.rsplit(".", 1)[-1].strip("\"' ")
+
+
+def _split(
+    fn: typing.Callable[..., typing.Any],
+) -> tuple[list[_Injection], list[inspect.Parameter], dict[str, typing.Any]]:
+    """Sort a resolver's parameters into injected and exposed.
+
+    Returns the injections, the parameters Strawberry should see, and the
+    ``Depend`` markers keyed by parameter name.
+    """
+    from sillo import Depend
+
+    signature = inspect.signature(fn)
+    injections: list[_Injection] = []
+    exposed: list[inspect.Parameter] = []
+    depends: dict[str, typing.Any] = {}
+
+    for parameter in signature.parameters.values():
+        name = parameter.name
+        annotation = _annotation_name(parameter.annotation)
+
+        if isinstance(parameter.default, Depend):
+            injections.append(_Injection(name, "depend"))
+            depends[name] = parameter.default
+        elif name in ROOT_NAMES:
+            injections.append(_Injection(name, "root"))
+        elif annotation == "Info":
+            injections.append(_Injection(name, "info"))
+        elif annotation in GRAPH_CONTEXT_ANNOTATIONS:
+            injections.append(_Injection(name, "graph"))
+        elif annotation in CONTEXT_ANNOTATIONS or (
+            not annotation and name in CONTEXT_NAMES
+        ):
+            injections.append(_Injection(name, "ctx"))
+        elif parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            raise ResolverError(
+                f"{fn.__name__} declares {parameter}, and GraphQL arguments are "
+                f"a fixed list — name each argument the field accepts."
+            )
+        else:
+            if parameter.annotation is inspect.Parameter.empty:
+                raise ResolverError(
+                    f"argument '{name}' of {fn.__name__} has no annotation. "
+                    f"GraphQL needs a type for every argument; annotate it, or "
+                    f"give it a Depend default if it is not one."
+                )
+            exposed.append(parameter)
+
+    return injections, exposed, depends
