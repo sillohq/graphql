@@ -201,3 +201,25 @@ def _shared(dependant: typing.Any) -> typing.Any:
         if missing and getattr(sub, "call", None) is not None:
             sub.cache_key = (sub.call, ())
     return dependant
+
+
+async def _solve(
+    dependant: typing.Any,
+    context: GraphContext,
+) -> tuple[dict[str, typing.Any], list[typing.Callable[[], typing.Any]]]:
+    """Resolve this resolver's dependencies against the operation's context.
+
+    The dependency cache lives on the ``GraphContext``, so two resolvers in one
+    operation that both ask for ``Depend(get_db)`` are handed the same session
+    — which is the whole point of a request-scoped dependency.
+    """
+    from sillo.core.dependencies.base import solve_dependencies
+
+    cleanup: list[typing.Callable[[], typing.Any]] = []
+    values = await solve_dependencies(
+        dependant,
+        ctx=context.http,
+        dependency_cache=context.dependency_cache,
+        cleanup_callbacks=cleanup,
+    )
+    return values, cleanup
