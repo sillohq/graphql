@@ -74,3 +74,12 @@ class Analysis:
             "breadth": self.breadth,
             "fields": self.fields,
         }
+
+
+class _TooLarge(GraphQLError):
+    """Internal: raised the moment a limit is passed, to stop walking."""
+
+    def __init__(self, message: str, **extensions: typing.Any) -> None:
+        super().__init__(
+            message, code=ErrorCode.OPERATION_TOO_COMPLEX, extensions=extensions
+        )
