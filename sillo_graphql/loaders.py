@@ -259,3 +259,26 @@ class LoaderRegistry:
     def __len__(self) -> int:
         """How many distinct loaders this operation has touched."""
         return len(self._batches)
+
+
+class _Scope:
+    """Async context manager returned by :meth:`LoaderRegistry.scope`."""
+
+    __slots__ = ("_context", "_token", "registry")
+
+    def __init__(self, registry: LoaderRegistry) -> None:
+        self.registry = registry
+        self._token: typing.Any = None
+        self._context: typing.Any = None
+
+    async def __aenter__(self) -> LoaderRegistry:
+        from sillo_graphql.context import GraphContext, current_context
+
+        self._context = GraphContext(loaders=self.registry)
+        self._token = current_context.set(self._context)
+        return self.registry
+
+    async def __aexit__(self, *exc_info: typing.Any) -> None:
+        from sillo_graphql.context import current_context
+
+        current_context.reset(self._token)
