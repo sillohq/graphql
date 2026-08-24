@@ -327,3 +327,10 @@ def _is_list(type_: typing.Any) -> bool:
     while isinstance(type_, GraphQLNonNull):
         type_ = type_.of_type
     return isinstance(type_, GraphQLList)
+
+
+def _named_type(type_: typing.Any) -> typing.Any:
+    """Unwrap list and non-null wrappers down to the named type."""
+    while isinstance(type_, GraphQLList | GraphQLNonNull):
+        type_ = type_.of_type
+    return type_
