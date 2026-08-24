@@ -37,3 +37,8 @@ __all__ = [
     "hash_document",
     "resolve_document",
 ]
+
+
+def hash_document(document: str) -> str:
+    """The SHA-256 of a document, as the APQ protocol computes it."""
+    return hashlib.sha256(document.encode("utf-8")).hexdigest()
