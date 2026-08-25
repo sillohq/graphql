@@ -368,3 +368,22 @@ def field(
     return strawberry.field(
         resolver=_build(fn, is_generator=False, auth=auth), **options
     )
+
+
+def mutation(
+    fn: typing.Callable[..., typing.Any] | None = None,
+    *,
+    cost: int | None = None,
+    auth: typing.Any = None,
+    **options: typing.Any,
+) -> typing.Any:
+    """Declare a mutation. The same rules as :func:`field`."""
+    if fn is None:
+        return lambda inner: mutation(inner, cost=cost, auth=auth, **options)
+
+    if cost is not None:
+        _COSTS[options.get("name") or fn.__name__] = cost
+
+    return strawberry.mutation(
+        resolver=_build(fn, is_generator=False, auth=auth), **options
+    )
