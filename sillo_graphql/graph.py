@@ -679,3 +679,10 @@ def _sole_operation_name(document: DocumentNode) -> str | None:
     if len(operations) == 1 and operations[0].name is not None:
         return operations[0].name.value
     return None
+
+
+def _has_mutation(document: DocumentNode) -> bool:
+    return any(
+        operation.operation is OperationType.MUTATION
+        for operation in _operations(document)
+    )
