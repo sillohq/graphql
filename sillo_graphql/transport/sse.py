@@ -40,3 +40,47 @@ def _event(name: str, data: typing.Any) -> str:
     """
     body = jsonlib.dumps(data, separators=(",", ":"))
     return f"event: {name}\ndata: {body}\n\n"
+
+
+class SseTransport:
+    """Streams one operation over an HTTP response."""
+
+    def __init__(self, graph: Graph, *, keepalive: float = 15.0) -> None:
+        self.graph = graph
+        self.keepalive = keepalive
+
+    async def handle(
+        self, ctx: HttpContext, payload: dict[str, typing.Any]
+    ) -> typing.Any:
+        """Answer with an event stream for *payload*."""
+        return stream(
+            self._events(ctx, payload),
+            content_type=MEDIA_TYPE,
+            headers={
+                "cache-control": "no-cache, no-transform",
+                # Proxies that buffer a response defeat the point of streaming
+                # it; nginx reads this one.
+                "x-accel-buffering": "no",
+                "connection": "keep-alive",
+            },
+        )
+
+    async def _events(
+        self, ctx: HttpContext, payload: dict[str, typing.Any]
+    ) -> typing.AsyncIterator[str]:
+        try:
+            async for result in self.graph.stream(payload, http=ctx):
+                yield _event("next", result.body())
+        except GraphQLError as error:
+            # An error before or during execution is still delivered on the
+            # stream: the response headers went out with the first byte, so
+            # there is no status code left to change.
+            yield _event(
+                "next",
+                {
+                    "errors": [
+                        {"message": error.message, "extensions": error.as_extensions()}
+                    ]
+                },
+            )
+        yield _event("complete", {})
