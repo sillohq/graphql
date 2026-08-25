@@ -327,3 +327,15 @@ def _build(
     wrapper.__signature__ = signature  # type: ignore[attr-defined]
     wrapper.__annotations__ = annotations
     return wrapper
+
+
+def _connection(context: typing.Any) -> typing.Any:
+    """The HTTP or WebSocket context an operation arrived on."""
+    connection = getattr(context, "connection", None)
+    if connection is None:
+        raise ResolverError(
+            "a resolver asked for `ctx`, and this operation has no connection "
+            "context. Executing a schema directly? Pass a GraphContext as the "
+            "context_value, or use sillo_graphql.testing.GraphClient."
+        )
+    return connection
