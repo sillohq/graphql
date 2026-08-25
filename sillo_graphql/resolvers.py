@@ -339,3 +339,32 @@ def _connection(context: typing.Any) -> typing.Any:
             "context_value, or use sillo_graphql.testing.GraphClient."
         )
     return connection
+
+
+def field(
+    fn: typing.Callable[..., typing.Any] | None = None,
+    *,
+    cost: int | None = None,
+    auth: typing.Any = None,
+    **options: typing.Any,
+) -> typing.Any:
+    """Declare a query field whose resolver reads like a ``sillo`` handler.
+
+    Args:
+        cost: What one selection of this field costs against
+            :attr:`~sillo_graphql.policy.Limits.cost`. Use it for the fields
+            that are genuinely expensive; the default is fine for the rest.
+        auth: Refuse the field unless ``ctx.user`` is set — pass ``True`` — or
+            unless a callable of ``(user, root, info)`` returns true.
+        **options: Passed through to ``strawberry.field``: ``name``,
+            ``description``, ``deprecation_reason``, ``permission_classes``.
+    """
+    if fn is None:
+        return lambda inner: field(inner, cost=cost, auth=auth, **options)
+
+    if cost is not None:
+        _COSTS[options.get("name") or fn.__name__] = cost
+
+    return strawberry.field(
+        resolver=_build(fn, is_generator=False, auth=auth), **options
+    )
