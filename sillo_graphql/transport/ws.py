@@ -270,3 +270,7 @@ class _Session:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+
+class _Closed(Exception):
+    """The socket is gone. Internal; never reaches a caller."""
