@@ -42,3 +42,21 @@ APPLICATION_JSON = "application/json"
 APPLICATION_GRAPHQL = "application/graphql"
 MULTIPART_FORM = "multipart/form-data"
 FORM_URLENCODED = "application/x-www-form-urlencoded"
+
+
+def negotiate(accept: str | None, *, enabled: bool) -> str:
+    """Which response media type to answer with.
+
+    The legacy type wins ties and wins by default: a client that says nothing,
+    or says ``*/*``, is a client that has not thought about this, and the
+    always-200 shape is what its library expects.
+    """
+    if not enabled or not accept:
+        return APPLICATION_JSON
+    for part in accept.split(","):
+        media = part.split(";", 1)[0].strip().lower()
+        if media == GRAPHQL_RESPONSE_JSON:
+            return GRAPHQL_RESPONSE_JSON
+        if media in (APPLICATION_JSON, "*/*", "application/*"):
+            return APPLICATION_JSON
+    return APPLICATION_JSON
