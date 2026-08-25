@@ -77,3 +77,44 @@ class _Prepared:
     variables: dict[str, typing.Any] | None
     operation_name: str | None
     analysis: Analysis
+
+
+@dataclasses.dataclass(slots=True)
+class Result:
+    """One operation's answer, before a transport frames it.
+
+    Attributes:
+        data: The ``data`` field, or ``None`` when execution did not begin.
+        errors: Already-formatted error objects.
+        extensions: Merged extensions, cost included when it was measured.
+        status_code: What the spec's media type should answer with. Ignored
+            under the legacy ``application/json``, which is always 200.
+        response: What resolvers asked to do to the response, if anything.
+    """
+
+    data: typing.Any = None
+    errors: list[dict[str, typing.Any]] = dataclasses.field(default_factory=list)
+    extensions: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
+    status_code: int = 200
+    response: typing.Any = None
+
+    def body(self) -> dict[str, typing.Any]:
+        """The JSON object to send.
+
+        ``data`` is present whenever execution began — including as ``null``,
+        which is how a client tells a failed operation from one that was never
+        run at all.
+        """
+        body: dict[str, typing.Any] = {}
+        if self.errors:
+            body["errors"] = self.errors
+        if self.data is not None or not self.errors:
+            body["data"] = self.data
+        if self.extensions:
+            body["extensions"] = self.extensions
+        return body
+
+    @property
+    def ok(self) -> bool:
+        """Whether the operation produced no errors."""
+        return not self.errors
