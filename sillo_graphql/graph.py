@@ -657,3 +657,17 @@ def _graphql_schema(schema: typing.Any) -> typing.Any:
     queries rather than towards allowing them.
     """
     return getattr(schema, "_schema", None)
+
+
+def _operations(
+    document: DocumentNode, operation_name: str | None = None
+) -> list[OperationDefinitionNode]:
+    return [
+        definition
+        for definition in document.definitions
+        if isinstance(definition, OperationDefinitionNode)
+        and (
+            operation_name is None
+            or (definition.name is not None and definition.name.value == operation_name)
+        )
+    ]
