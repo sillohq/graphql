@@ -66,3 +66,14 @@ LOGGER = logging.getLogger("sillo.graphql")
 #: Meta-fields that expose the schema. ``__typename`` is not one of them: it
 #: answers about the object in hand, not about the schema, and clients need it.
 INTROSPECTION_FIELDS = frozenset({"__schema", "__type"})
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Prepared:
+    """A document that has passed every gate and is ready to execute."""
+
+    source: str
+    document: DocumentNode
+    variables: dict[str, typing.Any] | None
+    operation_name: str | None
+    analysis: Analysis
