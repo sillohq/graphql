@@ -645,3 +645,15 @@ class Graph:
 
     def __repr__(self) -> str:
         return f"Graph({self.path!r}, subscriptions={self.subscriptions})"
+
+
+def _graphql_schema(schema: typing.Any) -> typing.Any:
+    """The graphql-core schema inside a Strawberry one.
+
+    Read through ``_schema`` because Strawberry offers no public accessor. The
+    attribute has been there for the whole 0.2x series; if a future release
+    renames it, cost analysis loses its type information and falls back to
+    treating every nested field as a list, which errs towards refusing large
+    queries rather than towards allowing them.
+    """
+    return getattr(schema, "_schema", None)
