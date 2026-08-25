@@ -364,3 +364,60 @@ def _from_params(params: typing.Mapping[str, typing.Any]) -> dict[str, typing.An
         elif isinstance(value, dict):
             payload[key] = value
     return payload
+
+
+def _attach(
+    payload: dict[str, typing.Any],
+    paths: dict[str, typing.Any],
+    files: typing.Mapping[str, typing.Any],
+    uploads: typing.Any,
+) -> None:
+    """Put uploaded files where ``map`` says they belong in the variables.
+
+    Limits are checked here rather than after: a request over the file count
+    should be refused before its contents are walked.
+    """
+    if len(paths) > uploads.max_files:
+        raise GraphQLError(
+            f"{len(paths)} files, over the limit of {uploads.max_files}",
+            code=ErrorCode.BAD_USER_INPUT,
+        )
+
+    total = 0
+    for name, targets in paths.items():
+        upload = files.get(name)
+        if upload is None:
+            raise GraphQLError(
+                f"`map` refers to file {name!r}, which the request does not carry",
+                code=ErrorCode.BAD_USER_INPUT,
+            )
+
+        size = _size_of(upload)
+        if size > uploads.max_size_bytes:
+            raise GraphQLError(
+                f"File {name!r} is larger than the limit of "
+                f"{uploads.max_size_bytes} bytes",
+                code=ErrorCode.BAD_USER_INPUT,
+            )
+        total += size
+        if total > uploads.max_total_bytes:
+            raise GraphQLError(
+                f"Uploads total more than the limit of {uploads.max_total_bytes} bytes",
+                code=ErrorCode.BAD_USER_INPUT,
+            )
+
+        content_type = getattr(upload, "content_type", None)
+        if not uploads.allows(content_type):
+            raise GraphQLError(
+                f"File {name!r} is {content_type or 'of unknown type'}, which "
+                f"this endpoint does not accept",
+                code=ErrorCode.BAD_USER_INPUT,
+            )
+
+        if not isinstance(targets, list):
+            raise GraphQLError(
+                f"`map` entry {name!r} must be a list of variable paths",
+                code=ErrorCode.BAD_USER_INPUT,
+            )
+        for path in targets:
+            _place(payload, str(path), upload)
