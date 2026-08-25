@@ -446,3 +446,15 @@ def _place(payload: dict[str, typing.Any], path: str, value: typing.Any) -> None
             f"`map` points at {path!r}, which the operation does not have",
             code=ErrorCode.BAD_USER_INPUT,
         ) from exc
+
+
+def _size_of(upload: typing.Any) -> int:
+    """How large an uploaded file is, whatever shape the framework hands over."""
+    for attribute in ("size", "content_length"):
+        value = getattr(upload, attribute, None)
+        if isinstance(value, int):
+            return value
+    body = getattr(upload, "file", None) or getattr(upload, "body", None)
+    if isinstance(body, bytes):
+        return len(body)
+    return 0
