@@ -276,3 +276,37 @@ _BUNDLED = """<!doctype html>
 </body>
 </html>
 """
+
+
+def render(policy: IDE, *, endpoint: str, socket: str | None = None) -> str:
+    """The explorer page for this endpoint.
+
+    Args:
+        policy: Which explorer, and how it is labelled.
+        endpoint: Path the page should POST to.
+        socket: WebSocket URL for subscriptions, or ``None`` when they are not
+            mounted — in which case the page does not claim to have them.
+    """
+    template = _CDN if policy.assets == "cdn" else _BUNDLED
+    # Escaped for an inline <script>: `</script>` inside a JSON string would
+    # otherwise end the block early, and the browser would parse the rest of
+    # the config as markup.
+    config = (
+        json.dumps(
+            {
+                "endpoint": endpoint,
+                "socket": socket,
+                "subscriptions": socket is not None,
+                "defaultQuery": policy.default_query,
+            }
+        )
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    return (
+        template.replace("__TITLE__", html_module.escape(policy.title))
+        .replace("__ENDPOINT__", html_module.escape(endpoint))
+        # Last, so a title or endpoint can never introduce the placeholder.
+        .replace("__CONFIG__", config)
+    )
