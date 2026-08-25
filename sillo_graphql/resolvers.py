@@ -387,3 +387,28 @@ def mutation(
     return strawberry.mutation(
         resolver=_build(fn, is_generator=False, auth=auth), **options
     )
+
+
+def subscription(
+    fn: typing.Callable[..., typing.Any] | None = None,
+    *,
+    auth: typing.Any = None,
+    **options: typing.Any,
+) -> typing.Any:
+    """Declare a subscription.
+
+    The resolver is an async generator, and may declare ``ctx:
+    WebSocketContext`` to reach the socket the operation arrived on.
+    """
+    if fn is None:
+        return lambda inner: subscription(inner, auth=auth, **options)
+
+    if not inspect.isasyncgenfunction(fn):
+        raise ResolverError(
+            f"{fn.__name__} is a subscription, so it has to be an async "
+            f"generator — `async def` with `yield` in it."
+        )
+
+    return strawberry.subscription(
+        resolver=_build(fn, is_generator=True, auth=auth), **options
+    )
