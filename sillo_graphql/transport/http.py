@@ -421,3 +421,28 @@ def _attach(
             )
         for path in targets:
             _place(payload, str(path), upload)
+
+
+def _place(payload: dict[str, typing.Any], path: str, value: typing.Any) -> None:
+    """Set ``variables.input.file`` — a dotted path, list indices included."""
+    parts = path.split(".")
+    cursor: typing.Any = payload
+    for part in parts[:-1]:
+        try:
+            cursor = cursor[int(part)] if part.isdigit() else cursor[part]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise GraphQLError(
+                f"`map` points at {path!r}, which the operation does not have",
+                code=ErrorCode.BAD_USER_INPUT,
+            ) from exc
+    last = parts[-1]
+    try:
+        if last.isdigit() and isinstance(cursor, list):
+            cursor[int(last)] = value
+        else:
+            cursor[last] = value
+    except (IndexError, TypeError) as exc:
+        raise GraphQLError(
+            f"`map` points at {path!r}, which the operation does not have",
+            code=ErrorCode.BAD_USER_INPUT,
+        ) from exc
