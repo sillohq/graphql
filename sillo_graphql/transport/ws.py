@@ -50,3 +50,27 @@ CLOSE_UNAUTHORIZED = 4401
 CLOSE_INIT_TIMEOUT = 4408
 CLOSE_ALREADY_INITIALISED = 4429
 CLOSE_SUBSCRIBER_EXISTS = 4409
+
+
+class WebSocketTransport:
+    """Serves one :class:`~sillo_graphql.graph.Graph` over a WebSocket."""
+
+    def __init__(
+        self,
+        graph: Graph,
+        *,
+        init_timeout: float = 10.0,
+        keepalive: float | None = 30.0,
+    ) -> None:
+        self.graph = graph
+        self.init_timeout = init_timeout
+        self.keepalive = keepalive
+
+    async def handle(self, ctx: WebSocketContext) -> None:
+        """Run one connection to completion."""
+        await ctx.accept(subprotocol=PROTOCOL)
+        session = _Session(self, ctx)
+        try:
+            await session.run()
+        finally:
+            await session.shutdown()
