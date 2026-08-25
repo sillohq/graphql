@@ -339,3 +339,28 @@ class HttpTransport:
             media,
             status=415,
         )
+
+
+def _from_params(params: typing.Mapping[str, typing.Any]) -> dict[str, typing.Any]:
+    """A payload from query-string or form fields.
+
+    ``variables`` and ``extensions`` arrive as JSON text in these transports,
+    and are decoded here so the rest of the pipeline sees one payload shape.
+    """
+    payload: dict[str, typing.Any] = {}
+    for key in ("query", "operationName", "documentId"):
+        value = params.get(key)
+        if isinstance(value, str):
+            payload[key] = value
+    for key in ("variables", "extensions"):
+        value = params.get(key)
+        if isinstance(value, str) and value:
+            try:
+                payload[key] = jsonlib.loads(value)
+            except ValueError as exc:
+                raise GraphQLError(
+                    f"`{key}` is not valid JSON", code=ErrorCode.BAD_USER_INPUT
+                ) from exc
+        elif isinstance(value, dict):
+            payload[key] = value
+    return payload
