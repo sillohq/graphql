@@ -412,3 +412,24 @@ def subscription(
     return strawberry.subscription(
         resolver=_build(fn, is_generator=True, auth=auth), **options
     )
+
+
+async def _check_auth(auth: typing.Any, context: typing.Any) -> None:
+    """Refuse the field unless *auth* accepts the caller.
+
+    Checked inside the resolver rather than as a schema directive, so a denial
+    is an error on that one field and the rest of the operation is still
+    answered. That is what a partial GraphQL response is for.
+    """
+    user = getattr(context, "user", None)
+    if user is None:
+        raise GraphQLDenied(
+            "Not authenticated", code=ErrorCode.UNAUTHENTICATED, status_code=401
+        )
+    if auth is True:
+        return
+    verdict = auth(user)
+    if inspect.isawaitable(verdict):
+        verdict = await verdict
+    if not verdict:
+        raise GraphQLDenied("Not permitted")
