@@ -671,3 +671,11 @@ def _operations(
             or (definition.name is not None and definition.name.value == operation_name)
         )
     ]
+
+
+def _sole_operation_name(document: DocumentNode) -> str | None:
+    """The name of the only operation in *document*, if there is exactly one."""
+    operations = _operations(document)
+    if len(operations) == 1 and operations[0].name is not None:
+        return operations[0].name.value
+    return None
