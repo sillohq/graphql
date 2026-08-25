@@ -30,3 +30,13 @@ if typing.TYPE_CHECKING:
 __all__ = ["MEDIA_TYPE", "SseTransport"]
 
 MEDIA_TYPE = "text/event-stream"
+
+
+def _event(name: str, data: typing.Any) -> str:
+    """One SSE frame.
+
+    JSON is serialised without newlines so a payload can never be mistaken for
+    the blank line that terminates an event.
+    """
+    body = jsonlib.dumps(data, separators=(",", ":"))
+    return f"event: {name}\ndata: {body}\n\n"
