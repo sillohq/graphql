@@ -233,3 +233,98 @@ class GraphClient:
             timeout=timeout,
             headers=self.headers,
         )
+
+
+class SubscriptionStream:
+    """One ``graphql-transport-ws`` subscription, as an async context manager.
+
+    Entering it connects, sends ``connection_init``, waits for
+    ``connection_ack`` and sends the ``subscribe``. Leaving it completes the
+    operation and closes the socket, so a test that fails part-way through
+    does not leave a subscription running.
+    """
+
+    def __init__(
+        self,
+        client: typing.Any,
+        path: str,
+        document: str,
+        *,
+        variables: dict[str, typing.Any] | None,
+        connection_params: dict[str, typing.Any] | None,
+        timeout: float,
+        headers: typing.Mapping[str, str] | None = None,
+    ) -> None:
+        self.client = client
+        self.path = path
+        self.document = document
+        self.variables = variables
+        self.connection_params = connection_params or {}
+        self.timeout = timeout
+        self.headers = dict(headers or {})
+        self.operation_id = "1"
+        self._socket: typing.Any = None
+        self._session: typing.Any = None
+        self.completed = False
+
+    async def __aenter__(self) -> SubscriptionStream:
+        # `headers` is only passed when there are some: the test client
+        # merges into whatever it is given, and merging into None is a crash.
+        extra = {"headers": self.headers} if self.headers else {}
+        self._session = self.client.websocket_connect(
+            self.path, subprotocols=["graphql-transport-ws"], **extra
+        )
+        self._socket = self._session.__enter__()
+        self._send({"type": "connection_init", "payload": self.connection_params})
+        ack = self._recv()
+        if ack.get("type") != "connection_ack":
+            raise AssertionError(f"expected connection_ack, got {ack!r}")
+        payload: dict[str, typing.Any] = {"query": self.document}
+        if self.variables:
+            payload["variables"] = self.variables
+        self._send({"type": "subscribe", "id": self.operation_id, "payload": payload})
+        return self
+
+    async def __aexit__(self, *exc_info: typing.Any) -> None:
+        try:
+            if not self.completed:
+                self._send({"type": "complete", "id": self.operation_id})
+        except Exception:
+            pass
+        self._session.__exit__(*exc_info)
+
+    def _send(self, message: dict[str, typing.Any]) -> None:
+        self._socket.send_text(jsonlib.dumps(message))
+
+    def _recv(self) -> dict[str, typing.Any]:
+        return jsonlib.loads(self._socket.receive_text())
+
+    async def next(self) -> GraphResult:
+        """The next ``next`` message, as a result.
+
+        Raises:
+            StreamEnded: if the subscription completed instead of producing
+                another value — the failure a test means to catch, and which
+                would otherwise hang.
+        """
+        while True:
+            message = self._recv()
+            kind = message.get("type")
+            if kind == "next":
+                return GraphResult(200, message.get("payload") or {})
+            if kind == "complete":
+                self.completed = True
+                raise StreamEnded("the subscription completed without another value")
+            if kind == "error":
+                self.completed = True
+                return GraphResult(200, {"errors": message.get("payload") or []})
+            # ping/pong and anything else: keep reading.
+
+    async def collect(self, count: int) -> list[GraphResult]:
+        """The next *count* values."""
+        return [await self.next() for _ in range(count)]
+
+    async def complete(self) -> None:
+        """Unsubscribe, and wait for the server to confirm."""
+        self._send({"type": "complete", "id": self.operation_id})
+        self.completed = True
