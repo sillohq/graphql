@@ -77,3 +77,34 @@ class OperationLog:
             context.cost if context.cost is not None else "-",
             len(result.errors),
         )
+
+
+@dataclasses.dataclass
+class OperationStats:
+    """What has been seen of one operation.
+
+    Durations are kept as a running total rather than a list: an endpoint
+    serving a few hundred operations a second would otherwise accumulate an
+    unbounded amount of memory in the name of observing itself.
+    """
+
+    count: int = 0
+    errors: int = 0
+    total_seconds: float = 0.0
+    slowest: float = 0.0
+    total_cost: int = 0
+
+    @property
+    def average(self) -> float:
+        """Mean duration in seconds, or ``0.0`` before anything has run."""
+        return self.total_seconds / self.count if self.count else 0.0
+
+    def as_dict(self) -> dict[str, float]:
+        """A plain mapping, for whatever this is being exported into."""
+        return {
+            "count": self.count,
+            "errors": self.errors,
+            "average_seconds": self.average,
+            "slowest_seconds": self.slowest,
+            "average_cost": self.total_cost / self.count if self.count else 0.0,
+        }
