@@ -34,3 +34,12 @@ from importlib.util import find_spec
 
 ALIAS = "sillo.graphql"
 REAL = "sillo_graphql"
+
+
+def _resolve(fullname: str) -> str | None:
+    """The real module *fullname* stands for, or ``None`` if it is not ours."""
+    if fullname == ALIAS:
+        return REAL
+    if fullname.startswith(ALIAS + "."):
+        return REAL + fullname[len(ALIAS) :]
+    return None
