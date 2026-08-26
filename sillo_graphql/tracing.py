@@ -108,3 +108,37 @@ class OperationStats:
             "slowest_seconds": self.slowest,
             "average_cost": self.total_cost / self.count if self.count else 0.0,
         }
+
+
+class Metrics:
+    """Per-operation counters, held in memory.
+
+    Deliberately not a Prometheus client, a StatsD client, or anything else
+    with a wire format: this collects, and an application exports it however
+    it already exports things::
+
+        @app.get("/metrics")
+        async def show(ctx):
+            return json(metrics.snapshot())
+    """
+
+    def __init__(self) -> None:
+        self.operations: dict[str, OperationStats] = {}
+
+    def __call__(self, result: Result, context: GraphContext) -> None:
+        stats = self.operations.setdefault(_name(context), OperationStats())
+        elapsed = _elapsed(context)
+        stats.count += 1
+        stats.total_seconds += elapsed
+        stats.slowest = max(stats.slowest, elapsed)
+        stats.total_cost += context.cost or 0
+        if result.errors:
+            stats.errors += 1
+
+    def snapshot(self) -> dict[str, dict[str, float]]:
+        """Everything counted so far."""
+        return {name: stats.as_dict() for name, stats in self.operations.items()}
+
+    def reset(self) -> None:
+        """Forget everything counted so far."""
+        self.operations.clear()
