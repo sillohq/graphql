@@ -42,3 +42,36 @@ class TestGraphQLError:
 
     def test_is_expected_so_it_is_never_masked(self):
         assert GraphQLError("x").expected is True
+
+
+class TestBuilders:
+    @pytest.mark.parametrize(
+        ("builder", "code"),
+        [
+            (not_found, ErrorCode.NOT_FOUND),
+            (bad_input, ErrorCode.BAD_USER_INPUT),
+            (conflict, ErrorCode.CONFLICT),
+            (internal, ErrorCode.INTERNAL_SERVER_ERROR),
+            (too_many_requests, ErrorCode.TOO_MANY_REQUESTS),
+        ],
+    )
+    def test_each_carries_its_own_code(self, builder, code):
+        assert builder("message").code == code
+
+    def test_keyword_arguments_become_extensions(self):
+        error = not_found("gone", id=7)
+        assert error.as_extensions() == {"code": "NOT_FOUND", "id": 7}
+
+    def test_retry_after_is_named_for_the_client(self):
+        error = too_many_requests(retry_after=2.5)
+        assert error.as_extensions()["retryAfter"] == 2.5
+
+    def test_retry_after_is_omitted_when_unknown(self):
+        assert "retryAfter" not in too_many_requests().as_extensions()
+
+    def test_every_builder_has_a_usable_default_message(self):
+        assert not_found().message
+        assert forbidden().message
+        assert unauthenticated().message
+        assert internal().message
+        assert too_many_requests().message
