@@ -32,3 +32,7 @@ LOGGER = logging.getLogger("sillo.graphql.operations")
 #: in development and rare in a client that has been through a build step, so
 #: they are worth being able to see as a group.
 ANONYMOUS = "anonymous"
+
+
+def _name(context: GraphContext) -> str:
+    return context.operation_name or ANONYMOUS
