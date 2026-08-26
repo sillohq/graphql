@@ -40,3 +40,40 @@ def _name(context: GraphContext) -> str:
 
 def _elapsed(context: GraphContext) -> float:
     return time.perf_counter() - context.started
+
+
+class OperationLog:
+    """Log operations, or only the slow ones.
+
+    Args:
+        logger: Where to write. Defaults to ``sillo.graphql.operations``.
+        slower_than: Only log operations taking at least this many seconds.
+            ``0`` logs everything, which is what a development log wants and a
+            production one does not.
+        errors: Always log an operation that produced errors, however fast.
+    """
+
+    def __init__(
+        self,
+        logger: logging.Logger | None = None,
+        *,
+        slower_than: float = 0.0,
+        errors: bool = True,
+    ) -> None:
+        self.logger = logger or LOGGER
+        self.slower_than = slower_than
+        self.errors = errors
+
+    def __call__(self, result: Result, context: GraphContext) -> None:
+        elapsed = _elapsed(context)
+        failed = bool(result.errors)
+        if elapsed < self.slower_than and not (failed and self.errors):
+            return
+        self.logger.log(
+            logging.WARNING if failed else logging.INFO,
+            "graphql %s %.1fms cost=%s errors=%d",
+            _name(context),
+            elapsed * 1000,
+            context.cost if context.cost is not None else "-",
+            len(result.errors),
+        )
