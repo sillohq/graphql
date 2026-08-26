@@ -328,3 +328,14 @@ class SubscriptionStream:
         """Unsubscribe, and wait for the server to confirm."""
         self._send({"type": "complete", "id": self.operation_id})
         self.completed = True
+
+
+def _result(response: typing.Any) -> GraphResult:
+    """Parse a response, tolerating one that is not JSON at all."""
+    try:
+        body = response.json()
+    except ValueError:
+        body = {"errors": [{"message": response.text}]}
+    if not isinstance(body, dict):
+        body = {"errors": [{"message": f"expected an object, got {body!r}"}]}
+    return GraphResult(response.status_code, body, response.headers)
