@@ -142,3 +142,32 @@ class Metrics:
     def reset(self) -> None:
         """Forget everything counted so far."""
         self.operations.clear()
+
+
+def opentelemetry(tracer: typing.Any) -> typing.Callable[..., None]:
+    """A hook that records each operation as a span.
+
+    The span is created after the fact, with an explicit start time taken from
+    the context — the hook runs when the operation finishes, and back-dating
+    the span is what keeps its duration honest rather than zero.
+
+    Args:
+        tracer: An OpenTelemetry ``Tracer``. Not imported here; this package
+            does not depend on OpenTelemetry, and an application that uses it
+            already has one to hand.
+    """
+
+    def observe(result: Result, context: GraphContext) -> None:
+        elapsed = _elapsed(context)
+        end = time.time_ns()
+        span = tracer.start_span(
+            f"graphql {_name(context)}",
+            start_time=end - int(elapsed * 1_000_000_000),
+        )
+        span.set_attribute("graphql.operation.name", _name(context))
+        span.set_attribute("graphql.errors", len(result.errors))
+        if context.cost is not None:
+            span.set_attribute("graphql.cost", context.cost)
+        span.end(end_time=end)
+
+    return observe
