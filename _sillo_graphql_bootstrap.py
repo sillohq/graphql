@@ -43,3 +43,28 @@ def _resolve(fullname: str) -> str | None:
     if fullname.startswith(ALIAS + "."):
         return REAL + fullname[len(ALIAS) :]
     return None
+
+
+def _framework_ships_graphql() -> str | None:
+    """Where the framework's own ``sillo/graphql`` lives, if it still does.
+
+    Versions of ``sillo-framework`` before 1.0 shipped a ``sillo.graphql``
+    module of their own. A meta-path finder is consulted *before* the path
+    finder, so this one would quietly shadow it — the same override that
+    installing into ``sillo/`` would have been, arrived at from the other
+    direction.
+
+    Rather than shadow it, the alias refuses and says which two things
+    disagree. Cheap: nothing is imported, only ``sillo.__path__`` is read, and
+    only at the moment someone actually imports ``sillo.graphql``.
+    """
+    module = sys.modules.get("sillo")
+    paths = getattr(module, "__path__", None) if module is not None else None
+    for base in paths or ():
+        for candidate in (
+            os.path.join(base, "graphql", "__init__.py"),
+            os.path.join(base, "graphql.py"),
+        ):
+            if os.path.exists(candidate):
+                return candidate
+    return None
