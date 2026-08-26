@@ -118,3 +118,118 @@ class GraphResult:
 
     def __repr__(self) -> str:
         return f"GraphResult({self.status_code}, ok={self.ok})"
+
+
+class GraphClient:
+    """A ``TestClient`` that speaks GraphQL.
+
+    Args:
+        app: The application to drive.
+        path: The endpoint's path.
+        headers: Sent with every request — an auth header, usually.
+    """
+
+    def __init__(
+        self,
+        app: typing.Any,
+        *,
+        path: str = "/graphql",
+        headers: typing.Mapping[str, str] | None = None,
+    ) -> None:
+        from sillo.testclient import TestClient
+
+        self.app = app
+        self.path = path
+        self.headers = dict(headers or {})
+        self._client = TestClient(app)
+
+    def __enter__(self) -> GraphClient:
+        self._client.__enter__()
+        return self
+
+    def __exit__(self, *exc_info: typing.Any) -> None:
+        self._client.__exit__(*exc_info)
+
+    def execute(
+        self,
+        document: str,
+        *,
+        variables: dict[str, typing.Any] | None = None,
+        operation_name: str | None = None,
+        headers: typing.Mapping[str, str] | None = None,
+        extensions: dict[str, typing.Any] | None = None,
+        method: str = "POST",
+    ) -> GraphResult:
+        """Run one operation and return the parsed response."""
+        payload: dict[str, typing.Any] = {"query": document}
+        if variables is not None:
+            payload["variables"] = variables
+        if operation_name is not None:
+            payload["operationName"] = operation_name
+        if extensions is not None:
+            payload["extensions"] = extensions
+
+        merged = {**self.headers, **(headers or {})}
+        if method == "GET":
+            params = {
+                key: value if isinstance(value, str) else jsonlib.dumps(value)
+                for key, value in payload.items()
+            }
+            response = self._client.get(self.path, params=params, headers=merged)
+        else:
+            response = self._client.post(self.path, json=payload, headers=merged)
+        return _result(response)
+
+    # Named for what a caller is doing, so a test reads as the operation it runs.
+    query = execute
+    mutate = execute
+
+    def batch(
+        self,
+        *documents: str | dict[str, typing.Any],
+        headers: typing.Mapping[str, str] | None = None,
+    ) -> list[GraphResult]:
+        """Run several operations in one request."""
+        payload = [
+            {"query": item} if isinstance(item, str) else item for item in documents
+        ]
+        response = self._client.post(
+            self.path, json=payload, headers={**self.headers, **(headers or {})}
+        )
+        body = response.json()
+        if not isinstance(body, list):
+            return [_result(response)]
+        return [GraphResult(response.status_code, item) for item in body]
+
+    def ide(self, headers: typing.Mapping[str, str] | None = None) -> typing.Any:
+        """Fetch the explorer page, as a browser would."""
+        return self._client.get(
+            self.path,
+            headers={"accept": "text/html", **self.headers, **(headers or {})},
+        )
+
+    def subscribe(
+        self,
+        document: str,
+        *,
+        variables: dict[str, typing.Any] | None = None,
+        connection_params: dict[str, typing.Any] | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+        **shorthand: typing.Any,
+    ) -> SubscriptionStream:
+        """Open a subscription, handshake included.
+
+        Variables may be passed as ``variables={...}`` or as keywords, which
+        is shorter and is what a test usually wants::
+
+            gql.subscribe(PRICES, symbol="ACME")
+        """
+        return SubscriptionStream(
+            self._client,
+            self.path,
+            document,
+            variables={**(variables or {}), **shorthand} or None,
+            connection_params=connection_params,
+            timeout=timeout,
+            headers=self.headers,
+        )
