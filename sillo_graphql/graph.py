@@ -686,3 +686,10 @@ def _has_mutation(document: DocumentNode) -> bool:
         operation.operation is OperationType.MUTATION
         for operation in _operations(document)
     )
+
+
+def _is_subscription(document: DocumentNode, operation_name: str | None) -> bool:
+    operations = _operations(document, operation_name)
+    return bool(operations) and all(
+        operation.operation is OperationType.SUBSCRIPTION for operation in operations
+    )
