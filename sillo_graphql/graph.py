@@ -703,3 +703,21 @@ def _executed(errors: list[dict[str, typing.Any]]) -> bool:
     is about the document, not about anything the document asked for.
     """
     return any(error.get("path") for error in errors)
+
+
+def _has_introspection(document: DocumentNode) -> bool:
+    """Whether the document asks the schema about itself.
+
+    Walked directly rather than added as a validation rule, because this
+    package does not own the schema and should not have to modify it to hold
+    an opinion about what it serves.
+    """
+    stack: list[typing.Any] = list(document.definitions)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, FieldNode) and node.name.value in INTROSPECTION_FIELDS:
+            return True
+        selection_set = getattr(node, "selection_set", None)
+        if selection_set is not None:
+            stack.extend(selection_set.selections)
+    return False
