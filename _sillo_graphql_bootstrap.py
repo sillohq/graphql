@@ -88,3 +88,39 @@ class _AliasLoader(Loader):
 
     def exec_module(self, module) -> None:
         """Already executed under its own name; nothing to run again."""
+
+
+class _AliasFinder(MetaPathFinder):
+    """Answers for ``sillo.graphql`` and anything beneath it."""
+
+    def find_spec(self, fullname: str, path=None, target=None):
+        real = _resolve(fullname)
+        if real is None:
+            return None
+
+        shipped = _framework_ships_graphql()
+        if shipped is not None:
+            raise ImportError(
+                f"sillo-graphql cannot provide `{ALIAS}`: the installed "
+                f"sillo-framework ships its own, at {shipped}. They are "
+                f"different packages with the same import path, and silently "
+                f"preferring either one would be wrong.\n\n"
+                f"Upgrade to sillo-framework>=1.0, which no longer ships it, "
+                f"or import `{REAL}` directly."
+            )
+
+        try:
+            if find_spec(real) is None:
+                return None
+        except (ImportError, ValueError):
+            # The package is half-installed, or its parent is missing. Decline
+            # rather than raise: another finder may do better, and the import
+            # error a caller gets should be the ordinary one.
+            return None
+
+        import importlib
+
+        module = importlib.import_module(real)
+        spec = ModuleSpec(fullname, _AliasLoader(real))
+        spec.submodule_search_locations = getattr(module, "__path__", None)
+        return spec
