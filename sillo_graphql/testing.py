@@ -42,3 +42,79 @@ class StreamEnded(SilloGraphQLError):
     so waiting longer would not help. Raising here is what turns a test that
     would hang into one that fails and says why.
     """
+
+
+class GraphResult:
+    """One response, with the dictionary walking already done.
+
+    Attributes:
+        status_code: The HTTP status.
+        body: The whole response body.
+    """
+
+    __slots__ = ("body", "headers", "status_code")
+
+    def __init__(
+        self,
+        status_code: int,
+        body: dict[str, typing.Any],
+        headers: typing.Mapping[str, str] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self.body = body
+        self.headers = dict(headers or {})
+
+    @property
+    def data(self) -> typing.Any:
+        """The ``data`` field."""
+        return self.body.get("data")
+
+    @property
+    def errors(self) -> list[dict[str, typing.Any]]:
+        """The ``errors`` field, or an empty list."""
+        return self.body.get("errors") or []
+
+    @property
+    def extensions(self) -> dict[str, typing.Any]:
+        """The ``extensions`` field, or an empty dict."""
+        return self.body.get("extensions") or {}
+
+    @property
+    def ok(self) -> bool:
+        """Whether the operation produced no errors."""
+        return not self.errors
+
+    @property
+    def messages(self) -> list[str]:
+        """Just the error messages, which is what an assertion usually wants."""
+        return [str(error.get("message", "")) for error in self.errors]
+
+    @property
+    def codes(self) -> list[str]:
+        """The ``extensions.code`` of each error."""
+        return [
+            str((error.get("extensions") or {}).get("code", ""))
+            for error in self.errors
+        ]
+
+    def __getitem__(self, key: str) -> typing.Any:
+        """Reach into ``data``, with a readable failure when it is not there."""
+        data = self.data
+        if not isinstance(data, dict):
+            raise AssertionError(
+                f"no data to read {key!r} from; the response was {self.body!r}"
+            )
+        if key not in data:
+            raise AssertionError(
+                f"{key!r} is not in data ({sorted(data)}); errors: {self.messages}"
+            )
+        return data[key]
+
+    def raise_for_errors(self) -> GraphResult:
+        """Fail loudly if the operation produced errors. Returns ``self``."""
+        if self.errors:
+            raise AssertionError(f"GraphQL errors: {self.messages}")
+        return self
+
+    def __repr__(self) -> str:
+        return f"GraphResult({self.status_code}, ok={self.ok})"
