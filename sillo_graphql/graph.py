@@ -693,3 +693,13 @@ def _is_subscription(document: DocumentNode, operation_name: str | None) -> bool
     return bool(operations) and all(
         operation.operation is OperationType.SUBSCRIPTION for operation in operations
     )
+
+
+def _executed(errors: list[dict[str, typing.Any]]) -> bool:
+    """Whether these errors came from an operation that actually ran.
+
+    An execution error carries the ``path`` of the field it happened at. A
+    syntax or validation error has no path, because there was no field — it
+    is about the document, not about anything the document asked for.
+    """
+    return any(error.get("path") for error in errors)
