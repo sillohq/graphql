@@ -68,3 +68,23 @@ def _framework_ships_graphql() -> str | None:
             if os.path.exists(candidate):
                 return candidate
     return None
+
+
+class _AliasLoader(Loader):
+    """Hands back the already-imported target, so both names are one object.
+
+    Loading the source a second time under the other name would give two
+    ``Graph`` classes and two sets of rooms — a broadcast would reach half of
+    them, and ``isinstance`` would disagree with itself.
+    """
+
+    def __init__(self, target: str) -> None:
+        self.target = target
+
+    def create_module(self, spec: ModuleSpec):
+        import importlib
+
+        return importlib.import_module(self.target)
+
+    def exec_module(self, module) -> None:
+        """Already executed under its own name; nothing to run again."""
