@@ -33,3 +33,12 @@ from sillo_graphql.errors import SilloGraphQLError
 __all__ = ["GraphClient", "GraphResult", "StreamEnded", "SubscriptionStream"]
 
 DEFAULT_TIMEOUT = 5.0
+
+
+class StreamEnded(SilloGraphQLError):
+    """A subscription finished when a test was still waiting for a value.
+
+    Named for what happened rather than for a timeout: the stream is closed,
+    so waiting longer would not help. Raising here is what turns a test that
+    would hang into one that fails and says why.
+    """
