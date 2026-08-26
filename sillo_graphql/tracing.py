@@ -36,3 +36,7 @@ ANONYMOUS = "anonymous"
 
 def _name(context: GraphContext) -> str:
     return context.operation_name or ANONYMOUS
+
+
+def _elapsed(context: GraphContext) -> float:
+    return time.perf_counter() - context.started
