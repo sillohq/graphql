@@ -124,3 +124,19 @@ class _AliasFinder(MetaPathFinder):
         spec = ModuleSpec(fullname, _AliasLoader(real))
         spec.submodule_search_locations = getattr(module, "__path__", None)
         return spec
+
+
+def install() -> bool:
+    """Register the finder. Returns whether it was newly added.
+
+    Idempotent, because a ``.pth`` is not the only thing that may import this
+    module — a test does too, and a second finder would be dead weight on every
+    import in the process.
+    """
+    if any(isinstance(finder, _AliasFinder) for finder in sys.meta_path):
+        return False
+    sys.meta_path.insert(0, _AliasFinder())
+    return True
+
+
+install()
