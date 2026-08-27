@@ -227,3 +227,28 @@ class TestPageArguments:
 
     def test_a_field_the_schema_does_not_have_costs_the_default(self, gql_schema):
         assert measure("{ ghost }", schema=gql_schema).fields == 1
+
+
+class TestMoreEdges:
+    def test_an_argument_that_is_not_a_page_size_is_skipped(self, gql_schema):
+        result = measure('{ tagged(kind: "x", limit: 2) { name } }', schema=gql_schema)
+        assert result.cost == 3
+
+    def test_only_non_page_arguments_falls_back_to_the_multiplier(self, gql_schema):
+        result = measure(
+            '{ tagged(kind: "x") { name } }',
+            schema=gql_schema,
+            limits=Limits(list_multiplier=6),
+        )
+        assert result.cost == 7
+
+    def test_a_typed_fragment_without_a_schema_keeps_the_parent(self):
+        # No schema, so there is no type to narrow to.
+        assert measure("{ tree { ... on Node { name } } }").fields == 2
+
+    def test_selecting_into_a_scalar_is_measured_and_left_to_validation(
+        self, gql_schema
+    ):
+        # `name` is a String. The document is invalid, and analysis runs first
+        # — so it has to walk it without a field table to consult.
+        assert measure("{ name { nonsense } }", schema=gql_schema).fields == 2
