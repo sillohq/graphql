@@ -250,3 +250,43 @@ class TestRegistry:
 
     def test_a_name_can_be_given(self):
         assert loader(lambda keys: keys, name="chosen").name == "chosen"
+
+
+class TestCancellation:
+    async def test_a_cancelled_load_does_not_break_its_siblings(self):
+        @loader
+        async def load(keys):
+            return [f"v{key}" for key in keys]
+
+        async with LoaderRegistry().scope():
+            first = asyncio.ensure_future(load(1))
+            second = asyncio.ensure_future(load(2))
+            await asyncio.sleep(0)
+            first.cancel()
+            assert await second == "v2"
+
+    async def test_a_cancelled_load_does_not_break_a_failing_batch(self):
+        @loader(cache=False)
+        async def load(keys):
+            raise RuntimeError("gone")
+
+        async with LoaderRegistry().scope():
+            first = asyncio.ensure_future(load(1))
+            second = asyncio.ensure_future(load(2))
+            await asyncio.sleep(0)
+            first.cancel()
+            with pytest.raises(RuntimeError):
+                await second
+
+    async def test_a_cancelled_load_does_not_break_a_short_batch(self):
+        @loader(cache=False)
+        async def load(keys):
+            return ["only one"]
+
+        async with LoaderRegistry().scope():
+            first = asyncio.ensure_future(load(1))
+            second = asyncio.ensure_future(load(2))
+            await asyncio.sleep(0)
+            first.cancel()
+            with pytest.raises(LoaderError):
+                await second
