@@ -205,3 +205,48 @@ class TestPriming:
         async with LoaderRegistry().scope():
             with pytest.raises(LoaderError, match="unhashable"):
                 load.prime([1], "x")
+
+
+class TestRegistry:
+    async def test_it_counts_the_loaders_an_operation_touched(self):
+        @loader
+        async def one(keys):
+            return list(keys)
+
+        @loader
+        async def two(keys):
+            return list(keys)
+
+        registry = LoaderRegistry()
+        async with registry.scope():
+            await asyncio.gather(one(1), two(2))
+
+        assert len(registry) == 2
+
+    async def test_two_loaders_of_the_same_name_stay_apart(self):
+        def make():
+            @loader
+            async def load(keys):
+                return list(keys)
+
+            return load
+
+        first, second = make(), make()
+        registry = LoaderRegistry()
+        async with registry.scope():
+            await asyncio.gather(first(1), second(1))
+
+        assert len(registry) == 2
+
+    def test_a_loader_names_itself_after_its_function(self):
+        @loader
+        async def load_author(keys):
+            """Doc."""
+            return list(keys)
+
+        assert load_author.name == "load_author"
+        assert repr(load_author) == "Loader('load_author')"
+        assert load_author.__doc__ == "Doc."
+
+    def test_a_name_can_be_given(self):
+        assert loader(lambda keys: keys, name="chosen").name == "chosen"
