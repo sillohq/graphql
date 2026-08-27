@@ -132,3 +132,18 @@ class TestUploads:
         uploads = Uploads(content_types=("image/*",))
         assert uploads.allows("image/webp") is True
         assert uploads.allows("video/mp4") is False
+
+
+class TestPersisted:
+    def test_is_disabled_when_neither_mode_is_set(self):
+        assert Persisted().enabled is False
+
+    def test_apq_alone_enables_it(self):
+        assert Persisted(apq=True).enabled is True
+
+    def test_a_manifest_alone_enables_it(self):
+        assert Persisted(trusted={"a": "{ x }"}).enabled is True
+
+    def test_ttl_must_be_positive(self):
+        with pytest.raises(ValueError, match="ttl"):
+            Persisted(ttl=0)
