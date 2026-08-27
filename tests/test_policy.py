@@ -160,3 +160,11 @@ class TestIDE:
     def test_both_known_sources_are_accepted(self):
         assert IDE(assets="cdn").assets == "cdn"
         assert IDE(assets="bundled").assets == "bundled"
+
+
+class TestErrorPolicy:
+    def test_masks_by_default(self):
+        assert ErrorPolicy().mask is True
+
+    def test_stacktraces_are_off_by_default(self):
+        assert ErrorPolicy().include_stacktrace is False
