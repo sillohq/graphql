@@ -157,3 +157,51 @@ class TestFailures:
     def test_a_batch_size_below_one_is_refused(self):
         with pytest.raises(ValueError, match="max_batch_size"):
             Loader(lambda keys: keys, max_batch_size=0)
+
+
+class TestPriming:
+    async def test_a_primed_key_is_never_asked_for(self):
+        calls = []
+
+        @loader
+        async def load(keys):
+            calls.append(list(keys))
+            return list(keys)
+
+        async with LoaderRegistry().scope():
+            load.prime(1, "already known")
+            assert await load(1) == "already known"
+
+        assert calls == []
+
+    async def test_forgetting_sends_the_key_back_to_the_batch(self):
+        calls = []
+
+        @loader
+        async def load(keys):
+            calls.append(list(keys))
+            return [f"fresh-{key}" for key in keys]
+
+        async with LoaderRegistry().scope():
+            load.prime(1, "stale")
+            load.forget(1)
+            assert await load(1) == "fresh-1"
+
+        assert calls == [[1]]
+
+    async def test_forgetting_an_unknown_key_is_harmless(self):
+        @loader
+        async def load(keys):
+            return list(keys)
+
+        async with LoaderRegistry().scope():
+            load.forget("never seen")
+
+    async def test_an_unhashable_key_cannot_be_primed(self):
+        @loader
+        async def load(keys):
+            return list(keys)
+
+        async with LoaderRegistry().scope():
+            with pytest.raises(LoaderError, match="unhashable"):
+                load.prime([1], "x")
