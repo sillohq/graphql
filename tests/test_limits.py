@@ -51,3 +51,18 @@ class TestDepth:
         plain = measure("{ tree { name } }", schema=gql_schema).depth
         inline = measure("{ tree { ... on Node { name } } }", schema=gql_schema).depth
         assert plain == inline
+
+
+class TestAliases:
+    def test_the_same_field_selected_twice_counts_twice(self):
+        assert measure("{ a: name b: name }").aliases == 2
+
+    def test_over_the_limit_names_the_field(self):
+        document = "{ " + " ".join(f"a{i}: name" for i in range(6)) + " }"
+        with pytest.raises(GraphQLError, match="'name'"):
+            enforce(parse(document), limits=Limits(aliases=5))
+
+    def test_aliases_are_counted_per_selection_set(self, gql_schema):
+        # Three here and three there is not the same as six of one field.
+        document = "{ a: tree { x: name y: name } b: tree { x: name y: name } }"
+        assert measure(document, schema=gql_schema).aliases == 2
