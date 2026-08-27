@@ -113,3 +113,47 @@ class TestBatching:
 
         assert got == [2, 2]
         assert calls == [2]
+
+
+class TestFailures:
+    async def test_a_raising_batch_reaches_every_waiter(self):
+        @loader
+        async def load(keys):
+            raise RuntimeError("database gone")
+
+        async with LoaderRegistry().scope():
+            with pytest.raises(RuntimeError, match="database gone"):
+                await asyncio.gather(load(1), load(2))
+
+    async def test_a_short_result_is_named_as_a_contract_break(self):
+        @loader
+        async def load(keys):
+            return [1]
+
+        async with LoaderRegistry().scope():
+            with pytest.raises(LoaderError, match="one value per key"):
+                await asyncio.gather(load(1), load(2))
+
+    async def test_an_exception_in_the_list_fails_only_that_key(self):
+        @loader
+        async def load(keys):
+            return [KeyError("missing") if key == 2 else key for key in keys]
+
+        async with LoaderRegistry().scope():
+            first = asyncio.ensure_future(load(1))
+            second = asyncio.ensure_future(load(2))
+            assert await first == 1
+            with pytest.raises(KeyError):
+                await second
+
+    async def test_calling_outside_an_operation_says_so(self):
+        @loader
+        async def load(keys):
+            return list(keys)
+
+        with pytest.raises(LoaderError, match="outside a GraphQL operation"):
+            await load(1)
+
+    def test_a_batch_size_below_one_is_refused(self):
+        with pytest.raises(ValueError, match="max_batch_size"):
+            Loader(lambda keys: keys, max_batch_size=0)
