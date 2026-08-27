@@ -91,3 +91,44 @@ class TestTransport:
 
     def test_max_body_bytes_reads_the_string(self):
         assert Transport(max_body="2MB").max_body_bytes == 2 * 1024**2
+
+
+class TestUploads:
+    def test_are_off_by_default(self):
+        assert Uploads().enabled is False
+
+    def test_max_files_below_one_is_refused(self):
+        with pytest.raises(ValueError, match="max_files"):
+            Uploads(max_files=0)
+
+    def test_sizes_are_validated_eagerly(self):
+        with pytest.raises(ValueError):
+            Uploads(max_size="lots")
+        with pytest.raises(ValueError):
+            Uploads(max_total="lots")
+
+    def test_byte_properties_read_the_strings(self):
+        uploads = Uploads(max_size="1MB", max_total="3MB")
+        assert uploads.max_size_bytes == 1024**2
+        assert uploads.max_total_bytes == 3 * 1024**2
+
+    def test_no_allow_list_allows_anything(self):
+        assert Uploads().allows("application/x-anything") is True
+        assert Uploads().allows(None) is True
+
+    def test_an_allow_list_refuses_an_unknown_type(self):
+        uploads = Uploads(content_types=("image/png",))
+        assert uploads.allows("image/png") is True
+        assert uploads.allows("text/plain") is False
+
+    def test_an_allow_list_refuses_a_missing_type(self):
+        assert Uploads(content_types=("image/png",)).allows(None) is False
+
+    def test_parameters_are_not_part_of_the_match(self):
+        uploads = Uploads(content_types=("image/png",))
+        assert uploads.allows("image/png; charset=binary") is True
+
+    def test_a_glob_matches_a_family(self):
+        uploads = Uploads(content_types=("image/*",))
+        assert uploads.allows("image/webp") is True
+        assert uploads.allows("video/mp4") is False
