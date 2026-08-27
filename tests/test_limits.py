@@ -177,3 +177,23 @@ class TestFragments:
     def test_a_condition_naming_an_unknown_type_keeps_the_parent(self, gql_schema):
         result = measure("{ tree { ... on Ghost { name } } }", schema=gql_schema)
         assert result.fields == 2
+
+
+class TestOperations:
+    def test_the_worst_operation_in_a_document_is_reported(self):
+        document = "query A { a } query B { b { c { d } } }"
+        assert measure(document).depth == 3
+
+    def test_one_operation_can_be_named(self):
+        document = "query A { a } query B { b { c { d } } }"
+        assert measure(document, operation_name="A").depth == 1
+
+    def test_a_document_with_no_operation_measures_as_nothing(self):
+        assert measure("fragment a on Query { name }").depth == 0
+
+    def test_a_subscription_root_is_understood(self, gql_schema):
+        assert measure("mutation { touch }", schema=gql_schema).fields == 1
+
+    def test_extensions_carry_every_measure(self):
+        keys = measure("{ a }").as_extensions()
+        assert set(keys) == {"depth", "cost", "aliases", "breadth", "fields"}
