@@ -66,3 +66,13 @@ class TestAliases:
         # Three here and three there is not the same as six of one field.
         document = "{ a: tree { x: name y: name } b: tree { x: name y: name } }"
         assert measure(document, schema=gql_schema).aliases == 2
+
+
+class TestBreadth:
+    def test_it_is_the_largest_selection_set(self):
+        assert measure("{ a b c }").breadth == 3
+
+    def test_over_the_limit_is_refused(self):
+        document = "{ " + " ".join(f"f{i}: name" for i in range(12)) + " }"
+        with pytest.raises(GraphQLError, match="over the limit"):
+            enforce(parse(document), limits=Limits(breadth=10, aliases=100))
