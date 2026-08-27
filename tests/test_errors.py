@@ -75,3 +75,22 @@ class TestBuilders:
         assert unauthenticated().message
         assert internal().message
         assert too_many_requests().message
+
+
+class TestDenied:
+    def test_unauthenticated_is_a_401(self):
+        error = unauthenticated()
+        assert isinstance(error, GraphQLDenied)
+        assert error.status_code == 401
+        assert error.code == ErrorCode.UNAUTHENTICATED
+
+    def test_forbidden_is_a_403(self):
+        error = forbidden()
+        assert error.status_code == 403
+        assert error.code == ErrorCode.FORBIDDEN
+
+    def test_is_still_a_graphql_error(self):
+        assert isinstance(forbidden(), GraphQLError)
+
+    def test_status_can_be_chosen(self):
+        assert GraphQLDenied("x", status_code=418).status_code == 418
