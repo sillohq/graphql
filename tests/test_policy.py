@@ -147,3 +147,16 @@ class TestPersisted:
     def test_ttl_must_be_positive(self):
         with pytest.raises(ValueError, match="ttl"):
             Persisted(ttl=0)
+
+
+class TestIDE:
+    def test_is_off_by_default(self):
+        assert IDE().enabled is False
+
+    def test_assets_must_name_a_known_source(self):
+        with pytest.raises(ValueError, match="bundled"):
+            IDE(assets="local")
+
+    def test_both_known_sources_are_accepted(self):
+        assert IDE(assets="cdn").assets == "cdn"
+        assert IDE(assets="bundled").assets == "bundled"
