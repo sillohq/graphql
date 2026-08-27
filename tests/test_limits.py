@@ -24,3 +24,7 @@ type Mutation { touch: String }
 @pytest.fixture(scope="module")
 def gql_schema():
     return build_schema(SDL)
+
+
+def measure(document: str, *, limits=None, schema=None, **kwargs):
+    return analyze(parse(document), limits=limits or Limits(), schema=schema, **kwargs)
