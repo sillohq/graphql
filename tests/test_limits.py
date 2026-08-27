@@ -28,3 +28,26 @@ def gql_schema():
 
 def measure(document: str, *, limits=None, schema=None, **kwargs):
     return analyze(parse(document), limits=limits or Limits(), schema=schema, **kwargs)
+
+
+class TestDepth:
+    def test_a_flat_query_is_depth_one(self):
+        assert measure("{ name }").depth == 1
+
+    def test_nesting_counts(self, gql_schema):
+        assert measure("{ tree { child { name } } }", schema=gql_schema).depth == 3
+
+    def test_over_the_limit_is_refused_with_the_limit_named(self):
+        with pytest.raises(GraphQLError) as caught:
+            enforce(parse("{ a { b { c { d } } } }"), limits=Limits(depth=3))
+        assert caught.value.code == ErrorCode.OPERATION_TOO_COMPLEX
+        assert caught.value.as_extensions()["limit"] == 3
+
+    def test_a_fragment_adds_the_depth_it_expands_to(self, gql_schema):
+        document = "{ tree { ...deep } } fragment deep on Node { child { name } }"
+        assert measure(document, schema=gql_schema).depth == 3
+
+    def test_an_inline_fragment_does_not_add_a_level(self, gql_schema):
+        plain = measure("{ tree { name } }", schema=gql_schema).depth
+        inline = measure("{ tree { ... on Node { name } } }", schema=gql_schema).depth
+        assert plain == inline
