@@ -75,3 +75,19 @@ class TestLimits:
     def test_is_frozen(self):
         with pytest.raises(Exception):
             Limits().depth = 2
+
+
+class TestTransport:
+    def test_batch_cannot_be_negative(self):
+        with pytest.raises(ValueError, match="batch"):
+            Transport(batch=-1)
+
+    def test_zero_batch_is_allowed_and_means_refuse(self):
+        assert Transport(batch=0).batch == 0
+
+    def test_max_body_is_validated_eagerly(self):
+        with pytest.raises(ValueError):
+            Transport(max_body="huge")
+
+    def test_max_body_bytes_reads_the_string(self):
+        assert Transport(max_body="2MB").max_body_bytes == 2 * 1024**2
