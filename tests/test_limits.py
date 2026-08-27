@@ -19,3 +19,8 @@ type Query {
 }
 type Mutation { touch: String }
 """
+
+
+@pytest.fixture(scope="module")
+def gql_schema():
+    return build_schema(SDL)
