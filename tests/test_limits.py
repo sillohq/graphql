@@ -197,3 +197,33 @@ class TestOperations:
     def test_extensions_carry_every_measure(self):
         keys = measure("{ a }").as_extensions()
         assert set(keys) == {"depth", "cost", "aliases", "breadth", "fields"}
+
+
+class TestPageArguments:
+    def test_an_unrelated_argument_is_skipped(self, gql_schema):
+        # `nodes(limit:)` is the page argument; anything else is not.
+        result = measure(
+            "{ nodes { name } }", schema=gql_schema, limits=Limits(list_multiplier=4)
+        )
+        assert result.cost == 5
+
+    def test_a_non_integer_literal_falls_back_to_the_multiplier(self, gql_schema):
+        result = measure(
+            "{ nodes(limit: null) { name } }",
+            schema=gql_schema,
+            limits=Limits(list_multiplier=4),
+        )
+        assert result.cost == 5
+
+    def test_a_zero_page_size_still_costs_one_level(self, gql_schema):
+        assert measure("{ nodes(limit: 0) { name } }", schema=gql_schema).cost == 2
+
+    def test_an_inline_fragment_with_no_type_condition_keeps_the_parent(
+        self, gql_schema
+    ):
+        document = "query ($skip: Boolean!) { tree { ... @skip(if: $skip) { name } } }"
+        result = measure(document, schema=gql_schema, costs={"Node.name": 9})
+        assert result.cost == 10
+
+    def test_a_field_the_schema_does_not_have_costs_the_default(self, gql_schema):
+        assert measure("{ ghost }", schema=gql_schema).fields == 1
