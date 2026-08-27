@@ -73,3 +73,72 @@ class TestResponseHandle:
         assert response.headers == {"x-a": "1"}
         assert response.cookies == [(("session", "abc"), {"httponly": True})]
         assert response.deleted == [("old",)]
+
+
+class TestGraphContext:
+    def test_connection_is_the_http_context_over_http(self, http_context):
+        context = GraphContext(http=http_context)
+        assert context.connection is http_context
+
+    def test_connection_is_the_socket_over_a_websocket(self):
+        socket = object()
+        assert GraphContext(socket=socket).connection is socket
+
+    def test_connection_is_none_when_there_is_neither(self):
+        assert GraphContext().connection is None
+
+    def test_the_legacy_ctx_key_still_works(self, http_context):
+        context = GraphContext(http=http_context)
+        assert context["ctx"] is http_context
+
+    def test_attributes_are_readable_as_keys(self, http_context):
+        context = GraphContext(http=http_context)
+        assert context["http"] is http_context
+
+    def test_extra_keys_are_readable(self):
+        context = GraphContext(extra={"tenant": "acme"})
+        assert context["tenant"] == "acme"
+
+    def test_an_unknown_key_raises(self):
+        with pytest.raises(KeyError):
+            GraphContext()["nope"]
+
+    def test_length_and_iteration_agree(self):
+        context = GraphContext(extra={"tenant": "acme"})
+        assert len(context) == len(list(context))
+        assert len(set(context)) == len(context)
+
+    def test_an_extra_key_shadowing_an_attribute_is_counted_once(self):
+        context = GraphContext(extra={"http": "shadow", "cost": 1})
+        assert len(context) == len(set(context))
+
+    def test_it_is_a_mapping(self, http_context):
+        assert dict(GraphContext(http=http_context))["ctx"] is http_context
+
+    def test_user_is_none_without_authentication_middleware(self, http_context):
+        # `ctx.user` raises rather than answering when no middleware is
+        # mounted, and a resolver should see "nobody", not a 500.
+        assert GraphContext(http=http_context).user is None
+
+    def test_user_is_none_with_no_connection_at_all(self):
+        assert GraphContext().user is None
+
+    def test_user_is_read_through_rather_than_snapshotted(self):
+        class Late:
+            user = None
+
+        socket = Late()
+        context = GraphContext(socket=socket)
+        assert context.user is None
+        socket.user = "ada"
+        assert context.user == "ada"
+
+    def test_repr_says_which_transport(self, http_context):
+        assert "http" in repr(GraphContext(http=http_context))
+        assert "ws" in repr(GraphContext(socket=object()))
+
+    def test_a_dependency_cache_starts_empty(self):
+        assert GraphContext().dependency_cache == {}
+
+    def test_the_clock_starts_when_the_context_does(self):
+        assert GraphContext().started > 0
