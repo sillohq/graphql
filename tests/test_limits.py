@@ -156,3 +156,24 @@ class TestCost:
     def test_introspection_fields_are_free(self):
         assert measure("{ __typename }").cost == 0
         assert measure("{ __schema { types { name } } }").cost == 0
+
+
+class TestFragments:
+    def test_a_cyclic_fragment_does_not_hang(self):
+        document = "{ ...a } fragment a on Query { ...a }"
+        assert measure(document).depth >= 1
+
+    def test_an_unknown_fragment_is_left_to_validation(self):
+        assert measure("{ ...missing }").fields == 0
+
+    def test_an_inline_fragment_narrows_the_parent_type(self, gql_schema):
+        result = measure(
+            "{ tree { ... on Node { name } } }",
+            schema=gql_schema,
+            costs={"Node.name": 9},
+        )
+        assert result.cost == 10
+
+    def test_a_condition_naming_an_unknown_type_keeps_the_parent(self, gql_schema):
+        result = measure("{ tree { ... on Ghost { name } } }", schema=gql_schema)
+        assert result.fields == 2
