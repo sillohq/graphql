@@ -202,3 +202,24 @@ class TestBatching:
             "/graphql", json=[{"query": "{ hello }"}, {"query": "{ nope }"}]
         )
         assert response.status_code == 400
+
+
+class TestSpecMediaType:
+    def test_a_successful_query_is_a_200(self, gql):
+        assert gql.query("{ hello }", headers=SPEC).status_code == 200
+
+    def test_the_response_names_the_media_type(self, gql):
+        result = gql.query("{ hello }", headers=SPEC)
+        assert result.headers["content-type"].startswith(GRAPHQL_RESPONSE_JSON)
+
+    def test_a_validation_failure_is_a_400(self, gql):
+        assert gql.query("{ nope }", headers=SPEC).status_code == 400
+
+    def test_a_field_error_is_still_a_200(self, gql):
+        # The operation ran; one field failed. That is not a bad request.
+        result = gql.query("{ me(id: 99) }", headers=SPEC)
+        assert result.status_code == 200
+        assert result.errors
+
+    def test_a_field_error_is_a_200_under_the_legacy_type_too(self, gql):
+        assert gql.query("{ me(id: 99) }").status_code == 200
