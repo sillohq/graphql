@@ -402,3 +402,30 @@ class TestSubscription:
         )
         assert [r.data["one"] async for r in stream] == ["open"]
         assert closed == [True]
+
+
+class TestCosts:
+    def test_a_declared_cost_is_registered(self):
+        @field(cost=42)
+        def expensive() -> str:
+            return "x"
+
+        assert resolver_costs()["expensive"] == 42
+
+    def test_a_renamed_field_registers_under_its_schema_name(self):
+        @field(cost=7, name="cheap")
+        def internal_name() -> str:
+            return "x"
+
+        assert resolver_costs()["cheap"] == 7
+
+    def test_a_mutation_can_declare_a_cost(self):
+        @mutation(cost=9)
+        async def costly(x: int) -> int:
+            return x
+
+        assert resolver_costs()["costly"] == 9
+
+    def test_the_table_is_a_copy(self):
+        resolver_costs()["injected"] = 1
+        assert "injected" not in resolver_costs()
