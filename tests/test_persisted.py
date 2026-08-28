@@ -34,3 +34,12 @@ async def resolve(payload, *, policy=None, store=None, trusted=None):
         store=store if store is not None else MemoryStore(),
         trusted=trusted,
     )
+
+
+class TestHashing:
+    def test_it_is_the_sha256_of_the_document(self):
+        assert len(DIGEST) == 64
+        assert hash_document(DOCUMENT) == DIGEST
+
+    def test_a_different_document_hashes_differently(self):
+        assert hash_document("{ other }") != DIGEST
