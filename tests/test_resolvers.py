@@ -328,3 +328,77 @@ class TestMutation:
 
         sdl = strawberry.Schema(query=Query, mutation=Mutation).as_str()
         assert "Renames a thing." in sdl
+
+
+class TestSubscription:
+    async def test_a_generator_streams(self):
+        @strawberry.type
+        class Query:
+            @field
+            def ping() -> str:
+                return "pong"
+
+        @strawberry.type
+        class Subscription:
+            @subscription
+            async def counter(to: int = 2) -> typing.AsyncGenerator[int, None]:
+                for index in range(to):
+                    yield index
+
+        schema = strawberry.Schema(query=Query, subscription=Subscription)
+        stream = await schema.subscribe(
+            "subscription { counter(to: 2) }", context_value=GraphContext()
+        )
+        got = [result.data["counter"] async for result in stream]
+        assert got == [0, 1]
+
+    def test_a_plain_function_is_refused(self):
+        with pytest.raises(ResolverError, match="async generator"):
+
+            @subscription
+            async def not_a_generator() -> int:
+                return 1
+
+    def test_it_can_be_called_with_options(self):
+        @strawberry.type
+        class Subscription:
+            @subscription(description="Ticks.")
+            async def ticks() -> typing.AsyncGenerator[int, None]:
+                yield 1
+
+        @strawberry.type
+        class Query:
+            @field
+            def ping() -> str:
+                return "pong"
+
+        sdl = strawberry.Schema(query=Query, subscription=Subscription).as_str()
+        assert "Ticks." in sdl
+
+    async def test_a_dependency_is_closed_when_the_stream_ends(self):
+        closed = []
+
+        async def dependency():
+            try:
+                yield "open"
+            finally:
+                closed.append(True)
+
+        @strawberry.type
+        class Query:
+            @field
+            def ping() -> str:
+                return "pong"
+
+        @strawberry.type
+        class Subscription:
+            @subscription
+            async def one(thing=Depend(dependency)) -> typing.AsyncGenerator[str, None]:
+                yield thing
+
+        schema = strawberry.Schema(query=Query, subscription=Subscription)
+        stream = await schema.subscribe(
+            "subscription { one }", context_value=GraphContext()
+        )
+        assert [r.data["one"] async for r in stream] == ["open"]
+        assert closed == [True]
