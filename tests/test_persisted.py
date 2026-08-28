@@ -25,3 +25,12 @@ def apq(document=None, digest=DIGEST):
     if document is not None:
         payload["query"] = document
     return payload
+
+
+async def resolve(payload, *, policy=None, store=None, trusted=None):
+    return await resolve_document(
+        payload,
+        policy=policy or Persisted(apq=True),
+        store=store if store is not None else MemoryStore(),
+        trusted=trusted,
+    )
