@@ -135,3 +135,104 @@ class TestAnnotationName:
         import inspect
 
         assert _annotation_name(inspect.Parameter.empty) == ""
+
+
+class TestExecution:
+    async def test_ctx_reaches_the_resolver(self, http_context):
+        @strawberry.type
+        class Query:
+            @field
+            def method(ctx: HttpContext) -> str:
+                return ctx.method
+
+        schema = strawberry.Schema(query=Query)
+        result = await run(schema, "{ method }", GraphContext(http=http_context))
+        assert result.data == {"method": "POST"}
+
+    async def test_a_dependency_is_resolved(self, http_context):
+        async def dependency():
+            return "from di"
+
+        @strawberry.type
+        class Query:
+            @field
+            def value(thing=Depend(dependency)) -> str:
+                return thing
+
+        schema = strawberry.Schema(query=Query)
+        result = await run(schema, "{ value }", GraphContext(http=http_context))
+        assert result.data == {"value": "from di"}
+
+    async def test_two_resolvers_share_one_dependency_value(self, http_context):
+        calls = []
+
+        async def dependency():
+            calls.append(1)
+            return len(calls)
+
+        @strawberry.type
+        class Query:
+            @field
+            def a(thing=Depend(dependency)) -> int:
+                return thing
+
+            @field
+            def b(thing=Depend(dependency)) -> int:
+                return thing
+
+        schema = strawberry.Schema(query=Query)
+        result = await run(schema, "{ a b }", GraphContext(http=http_context))
+        assert result.data == {"a": 1, "b": 1}
+        assert len(calls) == 1
+
+    async def test_a_generator_dependency_is_closed_afterwards(self, http_context):
+        closed = []
+
+        async def dependency():
+            # `finally`, because teardown runs through `aclose()`, which
+            # raises GeneratorExit at the yield — bare code after it never
+            # runs, here or in a route.
+            try:
+                yield "open"
+            finally:
+                closed.append(True)
+
+        @strawberry.type
+        class Query:
+            @field
+            def value(thing=Depend(dependency)) -> str:
+                return thing
+
+        schema = strawberry.Schema(query=Query)
+        await run(schema, "{ value }", GraphContext(http=http_context))
+        assert closed == [True]
+
+    async def test_a_sync_resolver_works(self):
+        @strawberry.type
+        class Query:
+            @field
+            def plain(x: int) -> int:
+                return x + 1
+
+        result = await run(strawberry.Schema(query=Query), "{ plain(x: 1) }")
+        assert result.data == {"plain": 2}
+
+    async def test_arguments_arrive_by_name(self):
+        @strawberry.type
+        class Query:
+            @field
+            def join(left: str, right: str = "!") -> str:
+                return left + right
+
+        schema = strawberry.Schema(query=Query)
+        assert (await run(schema, '{ join(left: "a") }')).data == {"join": "a!"}
+
+    async def test_asking_for_ctx_without_a_connection_says_so(self):
+        @strawberry.type
+        class Query:
+            @field
+            def needs(ctx: HttpContext) -> str:
+                return "x"
+
+        result = await run(strawberry.Schema(query=Query), "{ needs }")
+        assert "no connection context" in result.errors[0].message
