@@ -69,3 +69,32 @@ class TestExtractHash:
     )
     def test_a_malformed_hash_is_no_hash(self, payload):
         assert extract_hash(payload) is None
+
+
+class TestMemoryStore:
+    async def test_it_returns_what_was_stored(self):
+        store = MemoryStore()
+        await store.set("k", DOCUMENT, 60)
+        assert await store.get("k") == DOCUMENT
+
+    async def test_an_unknown_key_is_none(self):
+        assert await MemoryStore().get("k") is None
+
+    async def test_it_evicts_the_oldest_when_full(self):
+        store = MemoryStore(max_entries=2)
+        await store.set("a", "1", 60)
+        await store.set("b", "2", 60)
+        await store.set("c", "3", 60)
+        assert await store.get("a") is None
+        assert await store.get("c") == "3"
+        assert len(store) == 2
+
+    async def test_rewriting_a_key_does_not_evict(self):
+        store = MemoryStore(max_entries=1)
+        await store.set("a", "1", 60)
+        await store.set("a", "2", 60)
+        assert await store.get("a") == "2"
+
+    def test_a_zero_capacity_store_is_refused(self):
+        with pytest.raises(ValueError, match="max_entries"):
+            MemoryStore(max_entries=0)
