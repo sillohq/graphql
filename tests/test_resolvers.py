@@ -114,3 +114,24 @@ class TestSignature:
             @field
             def bad(**things: int) -> str:
                 return "x"
+
+
+class TestAnnotationName:
+    @pytest.mark.parametrize(
+        ("annotation", "expected"),
+        [
+            (HttpContext, "HttpContext"),
+            ("HttpContext", "HttpContext"),
+            ("sillo.core.http.HttpContext", "HttpContext"),
+            ("HttpContext | None", "HttpContext"),
+            ("Optional[HttpContext]", "HttpContext"),
+            (int, "int"),
+        ],
+    )
+    def test_it_reduces_to_the_bare_name(self, annotation, expected):
+        assert _annotation_name(annotation) == expected
+
+    def test_an_empty_annotation_is_empty(self):
+        import inspect
+
+        assert _annotation_name(inspect.Parameter.empty) == ""
