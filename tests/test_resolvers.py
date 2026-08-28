@@ -293,3 +293,38 @@ class TestAuth:
         context = GraphContext(socket=Socket())
         result = await run(strawberry.Schema(query=Query), "{ secret }", context)
         assert result.data == {"secret": "top"}
+
+
+class TestMutation:
+    async def test_it_reads_like_a_field(self):
+        @strawberry.type
+        class Query:
+            @field
+            def ping() -> str:
+                return "pong"
+
+        @strawberry.type
+        class Mutation:
+            @mutation
+            async def shout(text: str) -> str:
+                return text.upper()
+
+        schema = strawberry.Schema(query=Query, mutation=Mutation)
+        result = await run(schema, 'mutation { shout(text: "hi") }')
+        assert result.data == {"shout": "HI"}
+
+    def test_it_can_be_called_with_options(self):
+        @strawberry.type
+        class Mutation:
+            @mutation(description="Renames a thing.")
+            async def rename(name: str) -> str:
+                return name
+
+        @strawberry.type
+        class Query:
+            @field
+            def ping() -> str:
+                return "pong"
+
+        sdl = strawberry.Schema(query=Query, mutation=Mutation).as_str()
+        assert "Renames a thing." in sdl
