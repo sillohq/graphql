@@ -18,3 +18,10 @@ from sillo_graphql.policy import Persisted
 
 DOCUMENT = "{ hello }"
 DIGEST = hash_document(DOCUMENT)
+
+
+def apq(document=None, digest=DIGEST):
+    payload = {"extensions": {"persistedQuery": {"sha256Hash": digest}}}
+    if document is not None:
+        payload["query"] = document
+    return payload
