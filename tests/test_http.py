@@ -223,3 +223,124 @@ class TestSpecMediaType:
 
     def test_a_field_error_is_a_200_under_the_legacy_type_too(self, gql):
         assert gql.query("{ me(id: 99) }").status_code == 200
+
+
+class TestUploads:
+    def files(self, gql, *, operations, mapping, files):
+        return gql._client.post(
+            "/graphql",
+            data={"operations": json.dumps(operations), "map": json.dumps(mapping)},
+            files=files,
+        )
+
+    def test_uploads_are_refused_unless_enabled(self, gql):
+        response = self.files(
+            gql,
+            operations={"query": "{ hello }"},
+            mapping={},
+            files={"0": ("a.txt", b"hi")},
+        )
+        assert response.status_code == 415
+
+    def test_an_enabled_endpoint_accepts_the_operation(self, build):
+        app = build(uploads=Uploads(enabled=True))
+        with GraphClient(app) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }"},
+                mapping={},
+                files={"0": ("a.txt", b"hi")},
+            )
+        assert response.json()["data"] == {"hello": "world"}
+
+    def test_missing_operations_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = gql._client.post(
+                "/graphql", data={"map": "{}"}, files={"0": ("a.txt", b"hi")}
+            )
+        assert response.status_code == 400
+
+    def test_operations_that_are_not_json_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = gql._client.post(
+                "/graphql",
+                data={"operations": "{oops", "map": "{}"},
+                files={"0": ("a.txt", b"hi")},
+            )
+        assert response.status_code == 400
+
+    def test_operations_that_are_not_an_object_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = self.files(
+                gql, operations=[1], mapping={}, files={"0": ("a.txt", b"hi")}
+            )
+        assert response.status_code == 400
+
+    def test_a_map_naming_an_absent_file_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }"},
+                mapping={"7": ["variables.file"]},
+                files={"0": ("a.txt", b"hi")},
+            )
+        assert response.status_code == 400
+        assert "does not carry" in response.json()["errors"][0]["message"]
+
+    def test_too_many_files_is_a_400(self, build):
+        uploads = Uploads(enabled=True, max_files=1)
+        with GraphClient(build(uploads=uploads)) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }"},
+                mapping={"0": ["variables.a"], "1": ["variables.b"]},
+                files={"0": ("a.txt", b"hi"), "1": ("b.txt", b"yo")},
+            )
+        assert response.status_code == 400
+        assert "over the limit" in response.json()["errors"][0]["message"]
+
+    def test_a_file_over_the_size_limit_is_a_400(self, build):
+        uploads = Uploads(enabled=True, max_size=4)
+        with GraphClient(build(uploads=uploads)) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }", "variables": {"file": None}},
+                mapping={"0": ["variables.file"]},
+                files={"0": ("a.txt", b"far too many bytes")},
+            )
+        assert response.status_code == 400
+        assert "larger than" in response.json()["errors"][0]["message"]
+
+    def test_a_disallowed_content_type_is_a_400(self, build):
+        uploads = Uploads(enabled=True, content_types=("image/png",))
+        with GraphClient(build(uploads=uploads)) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }", "variables": {"file": None}},
+                mapping={"0": ["variables.file"]},
+                files={"0": ("a.txt", b"hi", "text/plain")},
+            )
+        assert response.status_code == 400
+        assert "does not accept" in response.json()["errors"][0]["message"]
+
+    def test_a_map_entry_that_is_not_a_list_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }"},
+                mapping={"0": "variables.file"},
+                files={"0": ("a.txt", b"hi")},
+            )
+        assert response.status_code == 400
+        assert "list of variable paths" in response.json()["errors"][0]["message"]
+
+    def test_a_path_the_operation_lacks_is_a_400(self, build):
+        with GraphClient(build(uploads=Uploads(enabled=True))) as gql:
+            response = self.files(
+                gql,
+                operations={"query": "{ hello }"},
+                mapping={"0": ["variables.missing.deeper"]},
+                files={"0": ("a.txt", b"hi")},
+            )
+        assert response.status_code == 400
+        assert "does not have" in response.json()["errors"][0]["message"]
