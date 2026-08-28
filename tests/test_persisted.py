@@ -132,3 +132,53 @@ class TestAPQ:
         with pytest.raises(GraphQLError) as caught:
             await resolve({})
         assert caught.value.code == ErrorCode.BAD_USER_INPUT
+
+
+class TestTrustedDocuments:
+    def test_it_reads_a_mapping(self):
+        trusted = TrustedDocuments({DIGEST: DOCUMENT})
+        assert trusted.get(DIGEST) == DOCUMENT
+        assert DIGEST in trusted
+        assert len(trusted) == 1
+
+    def test_an_unknown_key_is_none(self):
+        assert TrustedDocuments({}).get("nope") is None
+
+    def test_it_reads_a_manifest_file(self, tmp_path):
+        path = tmp_path / "operations.json"
+        path.write_text(json.dumps({DIGEST: DOCUMENT}))
+        assert TrustedDocuments(str(path)).get(DIGEST) == DOCUMENT
+
+    def test_a_missing_manifest_says_what_to_do(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="Generate one"):
+            TrustedDocuments(str(tmp_path / "absent.json"))
+
+    def test_a_manifest_that_is_not_an_object_is_refused(self, tmp_path):
+        path = tmp_path / "operations.json"
+        path.write_text("[1, 2]")
+        with pytest.raises(ValueError, match="hash -> document"):
+            TrustedDocuments(str(path))
+
+    async def test_a_trusted_hash_executes(self):
+        trusted = TrustedDocuments({DIGEST: DOCUMENT})
+        assert await resolve({"documentId": DIGEST}, trusted=trusted) == DOCUMENT
+
+    async def test_an_untrusted_hash_is_refused(self):
+        with pytest.raises(GraphQLError) as caught:
+            await resolve({"documentId": "nope"}, trusted=TrustedDocuments({}))
+        assert caught.value.code == ErrorCode.OPERATION_NOT_PERMITTED
+
+    async def test_a_literal_document_in_the_manifest_is_allowed(self):
+        trusted = TrustedDocuments({DIGEST: DOCUMENT})
+        assert await resolve({"query": DOCUMENT}, trusted=trusted) == DOCUMENT
+
+    async def test_a_literal_document_not_in_the_manifest_is_refused(self):
+        trusted = TrustedDocuments({DIGEST: DOCUMENT})
+        with pytest.raises(GraphQLError) as caught:
+            await resolve({"query": "{ other }"}, trusted=trusted)
+        assert caught.value.code == ErrorCode.OPERATION_NOT_PERMITTED
+
+    async def test_neither_hash_nor_query_is_still_a_bad_request(self):
+        with pytest.raises(GraphQLError) as caught:
+            await resolve({}, trusted=TrustedDocuments({}))
+        assert caught.value.code == ErrorCode.BAD_USER_INPUT
