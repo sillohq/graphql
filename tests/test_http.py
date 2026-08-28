@@ -120,3 +120,48 @@ class TestPost:
 
     def test_another_method_is_a_405(self, gql):
         assert gql._client.request("PUT", "/graphql").status_code == 405
+
+
+class TestGet:
+    def test_a_query_over_get_works(self, gql):
+        assert gql.execute("{ hello }", method="GET").data == {"hello": "world"}
+
+    def test_a_mutation_over_get_is_a_405(self, gql):
+        result = gql.execute('mutation { rename(name: "x") }', method="GET")
+        assert result.status_code == 405
+
+    def test_get_queries_can_be_refused(self, build):
+        with GraphClient(build(transport=Transport(get_queries=False))) as gql:
+            assert gql.execute("{ hello }", method="GET").status_code == 405
+
+    def test_a_get_with_no_query_and_no_ide_is_a_400(self, gql):
+        assert gql._client.get("/graphql").status_code == 400
+
+    def test_a_browser_gets_the_explorer_when_it_is_on(self, build):
+        with GraphClient(build(ide=IDE(enabled=True))) as gql:
+            response = gql.ide()
+        assert response.status_code == 200
+        assert "<!doctype html>" in response.text
+
+    def test_a_browser_gets_a_400_when_the_explorer_is_off(self, gql):
+        assert gql.ide().status_code == 400
+
+    def test_a_non_browser_get_is_never_the_explorer(self, build):
+        with GraphClient(build(ide=IDE(enabled=True))) as gql:
+            response = gql._client.get(
+                "/graphql", headers={"accept": "application/json"}
+            )
+        assert response.status_code == 400
+
+    def test_variables_arrive_as_json_text(self, gql):
+        result = gql.execute(
+            "query ($t: String!) { search(term: $t) }",
+            variables={"t": "abc"},
+            method="GET",
+        )
+        assert result.data == {"search": "cba"}
+
+    def test_an_extensions_only_get_is_treated_as_an_operation(self, gql):
+        response = gql._client.get("/graphql", params={"extensions": "{}"})
+        assert response.status_code == 400
+        assert "No query" in response.json()["errors"][0]["message"]
