@@ -344,3 +344,16 @@ class TestUploads:
             )
         assert response.status_code == 400
         assert "does not have" in response.json()["errors"][0]["message"]
+
+
+class TestResponseControl:
+    def test_a_resolver_can_set_the_status(self, gql):
+        result = gql.query("{ stamp }")
+        assert result.status_code == 418
+
+    def test_a_resolver_can_set_a_header(self, gql):
+        assert gql.query("{ stamp }").headers["x-stamped"] == "yes"
+
+    def test_a_resolver_can_set_a_cookie(self, gql):
+        response = gql._client.post("/graphql", json={"query": "{ stamp }"})
+        assert "seen=1" in response.headers.get("set-cookie", "")
