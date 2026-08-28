@@ -429,3 +429,26 @@ class TestCosts:
     def test_the_table_is_a_copy(self):
         resolver_costs()["injected"] = 1
         assert "injected" not in resolver_costs()
+
+
+class TestSyncDependencies:
+    async def test_a_sync_generator_dependency_is_closed(self, http_context):
+        closed = []
+
+        def dependency():
+            try:
+                yield "open"
+            finally:
+                closed.append(True)
+
+        @strawberry.type
+        class Query:
+            @field
+            def value(thing=Depend(dependency)) -> str:
+                return thing
+
+        schema = strawberry.Schema(query=Query)
+        result = await run(schema, "{ value }", GraphContext(http=http_context))
+        assert result.data == {"value": "open"}
+        # `close()` on a sync generator returns None, not an awaitable.
+        assert closed == [True]
