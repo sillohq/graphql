@@ -236,3 +236,60 @@ class TestExecution:
 
         result = await run(strawberry.Schema(query=Query), "{ needs }")
         assert "no connection context" in result.errors[0].message
+
+
+class TestAuth:
+    async def test_a_gated_field_refuses_an_anonymous_caller(self):
+        @strawberry.type
+        class Query:
+            @field(auth=True)
+            def secret() -> str:
+                return "x"
+
+        result = await run(strawberry.Schema(query=Query), "{ secret }")
+        assert "Not authenticated" in result.errors[0].message
+
+    async def test_a_gated_field_admits_a_signed_in_caller(self):
+        class Socket:
+            user = "ada"
+
+        @strawberry.type
+        class Query:
+            @field(auth=True)
+            def secret() -> str:
+                return "top"
+
+        context = GraphContext(socket=Socket())
+        result = await run(strawberry.Schema(query=Query), "{ secret }", context)
+        assert result.data == {"secret": "top"}
+
+    async def test_a_predicate_can_refuse(self):
+        class Socket:
+            user = "guest"
+
+        @strawberry.type
+        class Query:
+            @field(auth=lambda user: user == "ada")
+            def secret() -> str:
+                return "top"
+
+        context = GraphContext(socket=Socket())
+        result = await run(strawberry.Schema(query=Query), "{ secret }", context)
+        assert "Not permitted" in result.errors[0].message
+
+    async def test_an_async_predicate_is_awaited(self):
+        class Socket:
+            user = "ada"
+
+        async def allow(user):
+            return user == "ada"
+
+        @strawberry.type
+        class Query:
+            @field(auth=allow)
+            def secret() -> str:
+                return "top"
+
+        context = GraphContext(socket=Socket())
+        result = await run(strawberry.Schema(query=Query), "{ secret }", context)
+        assert result.data == {"secret": "top"}
