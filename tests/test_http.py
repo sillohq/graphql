@@ -165,3 +165,40 @@ class TestGet:
         response = gql._client.get("/graphql", params={"extensions": "{}"})
         assert response.status_code == 400
         assert "No query" in response.json()["errors"][0]["message"]
+
+
+class TestBatching:
+    def test_a_batch_runs_in_order(self, gql):
+        results = gql.batch("{ hello }", '{ search(term: "ab") }')
+        assert [r.data for r in results] == [
+            {"hello": "world"},
+            {"search": "ba"},
+        ]
+
+    def test_a_batch_can_be_refused(self, build):
+        with GraphClient(build(transport=Transport(batch=0))) as gql:
+            response = gql._client.post("/graphql", json=[{"query": "{ hello }"}])
+        assert response.status_code == 400
+        assert "not accepted" in response.json()["errors"][0]["message"]
+
+    def test_an_empty_batch_is_a_400(self, gql):
+        response = gql._client.post("/graphql", json=[])
+        assert response.status_code == 400
+
+    def test_a_batch_over_the_cap_is_refused(self, build):
+        with GraphClient(build(transport=Transport(batch=2))) as gql:
+            response = gql._client.post("/graphql", json=[{"query": "{ hello }"}] * 3)
+        assert response.status_code == 400
+        assert "at most 2" in response.json()["errors"][0]["message"]
+
+    def test_a_non_object_entry_is_reported_in_place(self, gql):
+        response = gql._client.post("/graphql", json=[{"query": "{ hello }"}, 7])
+        body = response.json()
+        assert body[0]["data"] == {"hello": "world"}
+        assert "must be an object" in body[1]["errors"][0]["message"]
+
+    def test_the_worst_status_in_a_batch_wins(self, gql):
+        response = gql._client.post(
+            "/graphql", json=[{"query": "{ hello }"}, {"query": "{ nope }"}]
+        )
+        assert response.status_code == 400
