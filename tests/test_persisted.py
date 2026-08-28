@@ -98,3 +98,37 @@ class TestMemoryStore:
     def test_a_zero_capacity_store_is_refused(self):
         with pytest.raises(ValueError, match="max_entries"):
             MemoryStore(max_entries=0)
+
+
+class TestAPQ:
+    async def test_a_plain_query_passes_straight_through(self):
+        assert await resolve({"query": DOCUMENT}) == DOCUMENT
+
+    async def test_a_registration_stores_the_document(self):
+        store = MemoryStore()
+        assert await resolve(apq(DOCUMENT), store=store) == DOCUMENT
+        assert await store.get(DIGEST) == DOCUMENT
+
+    async def test_a_known_hash_is_answered_from_the_store(self):
+        store = MemoryStore()
+        await store.set(DIGEST, DOCUMENT, 60)
+        assert await resolve(apq(), store=store) == DOCUMENT
+
+    async def test_an_unknown_hash_asks_the_client_to_send_it(self):
+        with pytest.raises(GraphQLError) as caught:
+            await resolve(apq())
+        assert caught.value.code == ErrorCode.PERSISTED_QUERY_NOT_FOUND
+
+    async def test_a_mismatched_hash_is_refused(self):
+        with pytest.raises(GraphQLError, match="does not match"):
+            await resolve(apq(DOCUMENT, digest="0" * 64))
+
+    async def test_a_hash_is_refused_when_apq_is_off(self):
+        with pytest.raises(GraphQLError) as caught:
+            await resolve(apq(), policy=Persisted(apq=False))
+        assert caught.value.code == ErrorCode.PERSISTED_QUERY_NOT_SUPPORTED
+
+    async def test_neither_hash_nor_query_is_a_bad_request(self):
+        with pytest.raises(GraphQLError) as caught:
+            await resolve({})
+        assert caught.value.code == ErrorCode.BAD_USER_INPUT
