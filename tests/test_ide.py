@@ -66,3 +66,14 @@ class TestBundled:
         page = render(IDE(), endpoint="/g", socket="ws://testserver/g")
         assert config_of(page)["subscriptions"] is True
         assert config_of(page)["socket"] == "ws://testserver/g"
+
+
+class TestCdn:
+    def test_it_loads_graphiql_with_integrity_hashes(self):
+        page = render(IDE(assets="cdn"), endpoint="/g")
+        assert "unpkg.com/graphiql" in page
+        assert page.count("integrity=") >= 4
+
+    def test_the_config_is_still_substituted(self):
+        page = render(IDE(assets="cdn"), endpoint="/g", socket="ws://x/g")
+        assert '"endpoint": "/g"' in page or '"endpoint":"/g"' in page
