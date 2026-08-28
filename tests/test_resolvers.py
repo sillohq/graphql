@@ -17,3 +17,9 @@ from sillo_graphql.resolvers import (
     resolver_costs,
     subscription,
 )
+
+
+def sdl_of(**fields) -> str:
+    """Build a one-type schema and return its SDL."""
+    Query = strawberry.type(type("Query", (), {"__annotations__": {}, **fields}))
+    return strawberry.Schema(query=Query).as_str()
