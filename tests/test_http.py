@@ -357,3 +357,45 @@ class TestResponseControl:
     def test_a_resolver_can_set_a_cookie(self, gql):
         response = gql._client.post("/graphql", json={"query": "{ stamp }"})
         assert "seen=1" in response.headers.get("set-cookie", "")
+
+
+class TestTransportUnits:
+    """Paths a routed request cannot reach, driven directly."""
+
+    def transport(self, app):
+        from sillo.core.routing import Route  # noqa: F401
+
+        return _transport_of(app)
+
+    async def test_an_unhandled_method_is_a_405(self, app, http_context):
+        from sillo.core.http import HttpContext
+
+        ctx = HttpContext(
+            {
+                "type": "http",
+                "method": "PATCH",
+                "path": "/graphql",
+                "headers": [],
+                "query_string": b"",
+            },
+            receive=None,
+            send=None,
+        )
+        response = await _transport_of(app).handle(ctx)
+        assert response.status_code == 405
+
+    def test_a_dict_valued_parameter_is_taken_as_is(self):
+        from sillo_graphql.transport.http import _from_params
+
+        payload = _from_params({"query": "{ x }", "variables": {"a": 1}})
+        assert payload["variables"] == {"a": 1}
+
+    def test_an_empty_variables_string_is_ignored(self):
+        from sillo_graphql.transport.http import _from_params
+
+        assert "variables" not in _from_params({"query": "{ x }", "variables": ""})
+
+    def test_a_non_string_query_is_ignored(self):
+        from sillo_graphql.transport.http import _from_params
+
+        assert _from_params({"query": 7}) == {}
