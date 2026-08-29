@@ -263,3 +263,35 @@ class TestCloseCodes:
         assert CLOSE_UNAUTHORIZED == 4401
         assert CLOSE_ALREADY_INITIALISED == 4429
         assert CLOSE_SUBSCRIBER_EXISTS == 4409
+
+
+class FakeSocket:
+    """A socket for the paths a real client cannot drive."""
+
+    def __init__(self, incoming=(), *, fail_send=False, hang=False):
+        self.incoming = list(incoming)
+        self.fail_send = fail_send
+        self.hang = hang
+        self.sent = []
+        self.closed = None
+        self.accepted = None
+
+    async def accept(self, subprotocol=None):
+        self.accepted = subprotocol
+
+    async def receive_text(self):
+        if self.hang:
+            import asyncio
+
+            await asyncio.sleep(3600)
+        if not self.incoming:
+            raise RuntimeError("client gone")
+        return self.incoming.pop(0)
+
+    async def send_text(self, text):
+        if self.fail_send:
+            raise RuntimeError("socket closed")
+        self.sent.append(json.loads(text))
+
+    async def close(self, code=1000, reason=None):
+        self.closed = (code, reason)
