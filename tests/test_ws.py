@@ -47,3 +47,11 @@ class Session:
         if variables:
             payload["variables"] = variables
         self.send(type="subscribe", id=operation_id, payload=payload)
+
+
+@pytest.fixture
+def raw(app):
+    from sillo.testclient import TestClient
+
+    with TestClient(app) as client:
+        yield lambda: Session(client)
