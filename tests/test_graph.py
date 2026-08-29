@@ -366,3 +366,17 @@ class TestResult:
     def test_ok_reflects_the_errors(self):
         assert Result().ok is True
         assert Result(errors=[{"message": "x"}]).ok is False
+
+
+class TestInternals:
+    def test_errors_with_a_path_came_from_execution(self):
+        assert _executed([{"message": "x", "path": ["a"]}]) is True
+
+    def test_errors_without_a_path_did_not(self):
+        assert _executed([{"message": "x"}]) is False
+
+    def test_the_graphql_core_schema_is_reachable(self, schema):
+        assert _graphql_schema(schema) is not None
+
+    def test_a_schema_without_one_degrades_quietly(self):
+        assert _graphql_schema(object()) is None
