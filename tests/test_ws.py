@@ -104,3 +104,79 @@ class TestPing:
             session.send(type="pong")
             session.send(type="ping")
             assert session.recv()["type"] == "pong"
+
+
+class TestSubscribe:
+    def test_values_arrive_as_next_and_end_with_complete(self, raw):
+        with raw() as session:
+            session.init()
+            session.subscribe("subscription { ticks(count: 2) }")
+            first, second, done = session.recv(), session.recv(), session.recv()
+        assert first["payload"]["data"] == {"ticks": 0}
+        assert second["payload"]["data"] == {"ticks": 1}
+        assert done == {"type": "complete", "id": "1"}
+
+    def test_an_id_already_in_use_closes_the_connection(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.init()
+            session.subscribe("subscription { ticks(count: 100) }")
+            session.subscribe("subscription { ticks(count: 100) }")
+            for _ in range(5):
+                session.recv()
+
+    def test_a_non_string_id_closes_the_connection(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.init()
+            session.send(type="subscribe", id=7, payload={"query": "{ hello }"})
+            session.recv()
+
+    def test_a_missing_payload_closes_the_connection(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.init()
+            session.send(type="subscribe", id="1")
+            session.recv()
+
+    def test_a_query_over_the_socket_answers_once(self, raw):
+        with raw() as session:
+            session.init()
+            session.subscribe("{ hello }")
+            first, done = session.recv(), session.recv()
+        assert first["payload"]["data"] == {"hello": "world"}
+        assert done["type"] == "complete"
+
+    def test_a_refused_operation_arrives_as_an_error(self, raw):
+        with raw() as session:
+            session.init()
+            session.subscribe("{ __schema { types { name } } }")
+            message = session.recv()
+        assert message["type"] == "error"
+        assert message["payload"][0]["extensions"]["code"] == "OPERATION_NOT_PERMITTED"
+
+    def test_a_failing_subscription_reports_the_error(self, raw):
+        with raw() as session:
+            session.init()
+            session.subscribe("subscription { failing }")
+            first = session.recv()
+            second = session.recv()
+        assert first["payload"]["data"] == {"failing": 1}
+        assert second["payload"]["errors"]
+
+    def test_completing_stops_the_stream(self, raw):
+        with raw() as session:
+            session.init()
+            session.subscribe("subscription { ticks(count: 100) }")
+            session.recv()
+            session.send(type="complete", id="1")
+            session.send(type="ping")
+            # The ping is answered, so the connection survived the cancel.
+            while True:
+                message = session.recv()
+                if message["type"] == "pong":
+                    break
+
+    def test_completing_an_unknown_id_is_harmless(self, raw):
+        with raw() as session:
+            session.init()
+            session.send(type="complete", id="never-started")
+            session.send(type="ping")
+            assert session.recv()["type"] == "pong"
