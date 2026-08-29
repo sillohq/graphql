@@ -380,3 +380,12 @@ class TestInternals:
 
     def test_a_schema_without_one_degrades_quietly(self):
         assert _graphql_schema(object()) is None
+
+
+def _ours(caplog) -> str:
+    """Only the records this package logged."""
+    return "\n".join(
+        record.getMessage() + (record.exc_text or "")
+        for record in caplog.records
+        if record.name == "sillo.graphql"
+    )
