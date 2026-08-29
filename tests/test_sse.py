@@ -34,3 +34,13 @@ def sse_app(schema):
         return await events.handle(ctx, await ctx.json)
 
     return app
+
+
+class TestFraming:
+    def test_an_event_is_named_and_carries_json(self):
+        assert _event("next", {"a": 1}) == 'event: next\ndata: {"a":1}\n\n'
+
+    def test_json_is_written_without_newlines(self):
+        # A newline inside the payload would end the event early.
+        frame = _event("next", {"a": "x\ny"})
+        assert frame.count("\n\n") == 1
