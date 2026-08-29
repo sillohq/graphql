@@ -255,3 +255,11 @@ class TestHelperStream:
             async with gql.subscribe("subscription { ticks(count: 50) }") as stream:
                 await stream.next()
                 await stream.complete()
+
+
+class TestCloseCodes:
+    def test_they_are_the_protocol_s_own(self):
+        assert CLOSE_BAD_MESSAGE == 4400
+        assert CLOSE_UNAUTHORIZED == 4401
+        assert CLOSE_ALREADY_INITIALISED == 4429
+        assert CLOSE_SUBSCRIBER_EXISTS == 4409
