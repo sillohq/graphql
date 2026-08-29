@@ -503,3 +503,13 @@ class TestPlacement:
                 {"0": big, "1": big},
                 Uploads(enabled=True, max_total=8),
             )
+
+
+def _transport_of(app):
+    """The `HttpTransport` mounted on *app*."""
+    for route in app.get_all_routes():
+        handler = getattr(route, "handler", None)
+        owner = getattr(handler, "__self__", None)
+        if owner is not None and type(owner).__name__ == "HttpTransport":
+            return owner
+    raise AssertionError("no GraphQL transport on this application")
