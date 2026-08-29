@@ -55,3 +55,36 @@ def raw(app):
 
     with TestClient(app) as client:
         yield lambda: Session(client)
+
+
+class TestHandshake:
+    def test_init_is_acknowledged(self, raw):
+        with raw() as session:
+            assert session.init()["type"] == "connection_ack"
+
+    def test_a_second_init_closes_the_connection(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.init()
+            session.init()
+            session.recv()
+
+    def test_subscribing_before_init_is_refused(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.subscribe("subscription { ticks }")
+            session.recv()
+
+    def test_an_unparseable_message_closes_the_connection(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.socket.send_text("not json")
+            session.recv()
+
+    def test_a_message_that_is_not_an_object_closes_it(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.socket.send_text("[1, 2]")
+            session.recv()
+
+    def test_an_unknown_message_type_closes_it(self, raw):
+        with pytest.raises(Exception), raw() as session:
+            session.init()
+            session.send(type="nonsense")
+            session.recv()
