@@ -346,3 +346,23 @@ class TestHooks:
             return list(keys)
 
         assert load.name == "load"
+
+
+class TestResult:
+    def test_a_successful_body_carries_data(self):
+        assert Result(data={"a": 1}).body() == {"data": {"a": 1}}
+
+    def test_errors_alone_omit_data(self):
+        body = Result(errors=[{"message": "x"}]).body()
+        assert "data" not in body
+
+    def test_a_null_data_with_errors_is_still_reported(self):
+        body = Result(data=None, errors=[{"message": "x", "path": ["a"]}]).body()
+        assert body["errors"]
+
+    def test_extensions_are_included_when_there_are_some(self):
+        assert Result(data={}, extensions={"cost": 1}).body()["extensions"]
+
+    def test_ok_reflects_the_errors(self):
+        assert Result().ok is True
+        assert Result(errors=[{"message": "x"}]).ok is False
