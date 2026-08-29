@@ -219,3 +219,39 @@ class TestConnectHook:
 
         with TestClient(app) as client, Session(client) as session:
             assert session.init({"token": "good"})["type"] == "connection_ack"
+
+
+class TestHelperStream:
+    async def test_it_handshakes_and_reads(self, app):
+        with GraphClient(app) as gql:
+            async with gql.subscribe("subscription { ticks(count: 2) }") as stream:
+                results = await stream.collect(2)
+        assert [result.data for result in results] == [
+            {"ticks": 0},
+            {"ticks": 1},
+        ]
+
+    async def test_running_past_the_end_is_a_clear_failure(self, app):
+        with GraphClient(app) as gql:
+            async with gql.subscribe("subscription { ticks(count: 1) }") as stream:
+                await stream.next()
+                with pytest.raises(StreamEnded):
+                    await stream.next()
+
+    async def test_variables_can_be_passed_as_keywords(self, app):
+        with GraphClient(app) as gql:
+            document = "subscription ($n: Int!) { ticks(count: $n) }"
+            async with gql.subscribe(document, n=1) as stream:
+                assert (await stream.next()).data == {"ticks": 0}
+
+    async def test_an_error_message_becomes_a_result(self, app):
+        with GraphClient(app) as gql:
+            async with gql.subscribe("{ __schema { types { name } } }") as stream:
+                result = await stream.next()
+        assert result.codes == ["OPERATION_NOT_PERMITTED"]
+
+    async def test_completing_early_is_allowed(self, app):
+        with GraphClient(app) as gql:
+            async with gql.subscribe("subscription { ticks(count: 50) }") as stream:
+                await stream.next()
+                await stream.complete()
