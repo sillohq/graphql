@@ -16,3 +16,34 @@ from sillo_graphql.transport.ws import (
     CLOSE_UNAUTHORIZED,
     PROTOCOL,
 )
+
+
+class Session:
+    """A raw socket, for the protocol-level tests."""
+
+    def __init__(self, client, path="/graphql"):
+        self._session = client.websocket_connect(path, subprotocols=[PROTOCOL])
+        self.socket = None
+
+    def __enter__(self):
+        self.socket = self._session.__enter__()
+        return self
+
+    def __exit__(self, *exc):
+        self._session.__exit__(*exc)
+
+    def send(self, **message):
+        self.socket.send_text(json.dumps(message))
+
+    def recv(self):
+        return json.loads(self.socket.receive_text())
+
+    def init(self, payload=None):
+        self.send(type="connection_init", payload=payload or {})
+        return self.recv()
+
+    def subscribe(self, document, operation_id="1", **variables):
+        payload = {"query": document}
+        if variables:
+            payload["variables"] = variables
+        self.send(type="subscribe", id=operation_id, payload=payload)
