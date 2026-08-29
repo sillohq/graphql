@@ -180,3 +180,42 @@ class TestSubscribe:
             session.send(type="complete", id="never-started")
             session.send(type="ping")
             assert session.recv()["type"] == "pong"
+
+
+class TestConnectHook:
+    def test_a_hook_can_refuse_the_connection(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+
+        @graph.on_connect
+        async def authenticate(socket, params):
+            if params.get("token") != "good":
+                raise unauthenticated("bad token")
+            return {}
+
+        graph.mount(app)
+
+        from sillo.testclient import TestClient
+
+        with (
+            TestClient(app) as client,
+            pytest.raises(Exception),
+            Session(client) as session,
+        ):
+            session.init({"token": "bad"})
+            session.recv()
+
+    def test_a_hook_can_admit_the_connection(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+
+        @graph.on_connect
+        async def authenticate(socket, params):
+            return {"user": params.get("token")}
+
+        graph.mount(app)
+
+        from sillo.testclient import TestClient
+
+        with TestClient(app) as client, Session(client) as session:
+            assert session.init({"token": "good"})["type"] == "connection_ack"
