@@ -104,3 +104,100 @@ class TestMounting:
         with GraphClient(app) as client:
             document = client._client.get("/openapi.json")
         assert "/graphql" not in document.json().get("paths", {})
+
+
+class TestErrorPolicy:
+    def test_an_unexpected_exception_is_masked(self, gql):
+        result = gql.query("{ boom }")
+        assert result.messages == ["Unexpected error"]
+        assert result.codes == ["INTERNAL_SERVER_ERROR"]
+
+    def test_the_original_message_never_reaches_the_client(self, gql):
+        assert "secret" not in str(gql.query("{ boom }").body)
+
+    def test_masking_can_be_turned_off(self, build):
+        with GraphClient(build(errors=ErrorPolicy(mask=False))) as gql:
+            assert "dsn=postgres" in gql.query("{ boom }").messages[0]
+
+    def test_a_deliberate_error_is_never_masked(self, gql):
+        result = gql.query("{ me(id: 99) }")
+        assert result.messages == ["no user 99"]
+        assert result.codes == ["NOT_FOUND"]
+
+    def test_a_validation_error_is_passed_on_verbatim(self, gql):
+        result = gql.query("{ nope }")
+        assert "Cannot query field" in result.messages[0]
+        assert result.codes == ["BAD_USER_INPUT"]
+
+    def test_a_masked_error_is_logged_with_its_traceback(self, build, caplog):
+        with (
+            caplog.at_level(logging.ERROR, logger="sillo.graphql"),
+            GraphClient(build()) as gql,
+        ):
+            gql.query("{ boom }")
+        assert "dsn=postgres" in _ours(caplog)
+
+    def test_logging_can_be_turned_off(self, build, caplog):
+        # Scoped to this package's logger: Strawberry reports the error on its
+        # own logger too, which is not what this option governs.
+        policy = ErrorPolicy(log_masked=False)
+        with (
+            caplog.at_level(logging.ERROR, logger="sillo.graphql"),
+            GraphClient(build(errors=policy)) as gql,
+        ):
+            gql.query("{ boom }")
+        assert _ours(caplog) == ""
+
+    def test_a_stacktrace_can_be_attached_for_development(self, build):
+        policy = ErrorPolicy(mask=False, include_stacktrace=True)
+        with GraphClient(build(errors=policy)) as gql:
+            trace = gql.query("{ boom }").errors[0]["extensions"]["stacktrace"]
+        assert any("RuntimeError" in line for line in trace)
+
+    def test_a_registered_mapping_replaces_the_error(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+
+        @graph.on_error(RuntimeError)
+        def _(exc):
+            return not_found(f"mapped: {exc}")
+
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            result = gql.query("{ boom }")
+        assert result.codes == ["NOT_FOUND"]
+        assert result.messages[0].startswith("mapped:")
+
+    def test_a_mapping_that_returns_nothing_is_ignored(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+
+        @graph.on_error(RuntimeError)
+        def _(exc):
+            return None
+
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            assert gql.query("{ boom }").messages == ["Unexpected error"]
+
+    def test_a_mapping_for_another_exception_does_not_fire(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+
+        @graph.on_error(KeyError)
+        def _(exc):
+            return not_found("wrong one")
+
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            assert gql.query("{ boom }").messages == ["Unexpected error"]
+
+    def test_a_request_id_header_is_echoed_into_errors(self, gql):
+        result = gql.query("{ boom }", headers={"x-request-id": "abc-123"})
+        assert result.errors[0]["extensions"]["requestId"] == "abc-123"
+
+    def test_the_correlation_key_can_be_switched_off(self, build):
+        policy = ErrorPolicy(correlation_key=None)
+        with GraphClient(build(errors=policy)) as gql:
+            result = gql.query("{ boom }", headers={"x-request-id": "abc"})
+        assert "requestId" not in result.errors[0]["extensions"]
