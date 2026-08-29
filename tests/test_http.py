@@ -399,3 +399,30 @@ class TestTransportUnits:
         from sillo_graphql.transport.http import _from_params
 
         assert _from_params({"query": 7}) == {}
+
+
+class TestSizeOf:
+    def test_a_size_attribute_is_used(self):
+        from sillo_graphql.transport.http import _size_of
+
+        assert _size_of(type("F", (), {"size": 12})()) == 12
+
+    def test_a_content_length_is_used_when_there_is_no_size(self):
+        from sillo_graphql.transport.http import _size_of
+
+        assert _size_of(type("F", (), {"content_length": 9})()) == 9
+
+    def test_bytes_are_measured_directly(self):
+        from sillo_graphql.transport.http import _size_of
+
+        assert _size_of(type("F", (), {"file": b"abcd"})()) == 4
+
+    def test_a_body_attribute_is_measured(self):
+        from sillo_graphql.transport.http import _size_of
+
+        assert _size_of(type("F", (), {"body": b"abc"})()) == 3
+
+    def test_an_unmeasurable_upload_counts_as_nothing(self):
+        from sillo_graphql.transport.http import _size_of
+
+        assert _size_of(object()) == 0
