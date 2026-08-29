@@ -88,3 +88,19 @@ class TestHandshake:
             session.init()
             session.send(type="nonsense")
             session.recv()
+
+
+class TestPing:
+    def test_a_ping_is_answered_with_a_pong(self, raw):
+        with raw() as session:
+            session.init()
+            session.send(type="ping", payload={"n": 1})
+            answer = session.recv()
+        assert answer == {"type": "pong", "payload": {"n": 1}}
+
+    def test_an_unsolicited_pong_is_accepted(self, raw):
+        with raw() as session:
+            session.init()
+            session.send(type="pong")
+            session.send(type="ping")
+            assert session.recv()["type"] == "pong"
