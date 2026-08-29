@@ -295,3 +295,12 @@ class FakeSocket:
 
     async def close(self, code=1000, reason=None):
         self.closed = (code, reason)
+
+
+def graph_of(app):
+    for route in app.get_all_routes():
+        handler = getattr(route, "handler", None)
+        owner = getattr(handler, "__self__", None)
+        if owner is not None and type(owner).__name__ == "HttpTransport":
+            return owner.graph
+    raise AssertionError("no graph")
