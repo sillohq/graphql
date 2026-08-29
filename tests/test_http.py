@@ -426,3 +426,80 @@ class TestSizeOf:
         from sillo_graphql.transport.http import _size_of
 
         assert _size_of(object()) == 0
+
+
+class TestPlacement:
+    def payload(self):
+        return {
+            "query": "{ hello }",
+            "variables": {"input": {"file": None}, "files": [None, None]},
+        }
+
+    def test_a_file_lands_where_the_map_says(self, build):
+        from sillo_graphql.policy import Uploads
+        from sillo_graphql.transport.http import _attach
+
+        payload = self.payload()
+        upload = type("F", (), {"size": 3, "content_type": "text/plain"})()
+        _attach(
+            payload,
+            {"0": ["variables.input.file"]},
+            {"0": upload},
+            Uploads(enabled=True),
+        )
+        assert payload["variables"]["input"]["file"] is upload
+
+    def test_a_list_index_is_understood(self):
+        from sillo_graphql.policy import Uploads
+        from sillo_graphql.transport.http import _attach
+
+        payload = self.payload()
+        upload = type("F", (), {"size": 3, "content_type": "text/plain"})()
+        _attach(
+            payload, {"0": ["variables.files.1"]}, {"0": upload}, Uploads(enabled=True)
+        )
+        assert payload["variables"]["files"][1] is upload
+
+    def test_one_file_can_land_in_two_places(self):
+        from sillo_graphql.policy import Uploads
+        from sillo_graphql.transport.http import _attach
+
+        payload = self.payload()
+        upload = type("F", (), {"size": 3, "content_type": "text/plain"})()
+        _attach(
+            payload,
+            {"0": ["variables.input.file", "variables.files.0"]},
+            {"0": upload},
+            Uploads(enabled=True),
+        )
+        assert payload["variables"]["files"][0] is upload
+
+    def test_an_out_of_range_index_is_reported(self):
+        from sillo_graphql.errors import GraphQLError
+        from sillo_graphql.policy import Uploads
+        from sillo_graphql.transport.http import _attach
+
+        payload = self.payload()
+        upload = type("F", (), {"size": 3, "content_type": "text/plain"})()
+        with pytest.raises(GraphQLError, match="does not have"):
+            _attach(
+                payload,
+                {"0": ["variables.files.9"]},
+                {"0": upload},
+                Uploads(enabled=True),
+            )
+
+    def test_files_over_the_total_are_refused(self):
+        from sillo_graphql.errors import GraphQLError
+        from sillo_graphql.policy import Uploads
+        from sillo_graphql.transport.http import _attach
+
+        payload = self.payload()
+        big = type("F", (), {"size": 6, "content_type": "text/plain"})()
+        with pytest.raises(GraphQLError, match="total more than"):
+            _attach(
+                payload,
+                {"0": ["variables.files.0"], "1": ["variables.files.1"]},
+                {"0": big, "1": big},
+                Uploads(enabled=True, max_total=8),
+            )
