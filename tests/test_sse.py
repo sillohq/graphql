@@ -44,3 +44,51 @@ class TestFraming:
         # A newline inside the payload would end the event early.
         frame = _event("next", {"a": "x\ny"})
         assert frame.count("\n\n") == 1
+
+
+class TestStreaming:
+    def test_a_subscription_arrives_as_next_events(self, sse_app):
+        from sillo.testclient import TestClient
+
+        with TestClient(sse_app) as client:
+            response = client.post(
+                "/stream", json={"query": "subscription { ticks(count: 2) }"}
+            )
+
+        assert response.headers["content-type"].startswith(MEDIA_TYPE)
+        events = parse_events(response.text)
+        assert [name for name, _ in events] == ["next", "next", "complete"]
+        assert events[0][1]["data"] == {"ticks": 0}
+
+    def test_a_query_arrives_as_a_single_event(self, sse_app):
+        from sillo.testclient import TestClient
+
+        with TestClient(sse_app) as client:
+            response = client.post("/stream", json={"query": "{ hello }"})
+
+        events = parse_events(response.text)
+        assert [name for name, _ in events] == ["next", "complete"]
+        assert events[0][1]["data"] == {"hello": "world"}
+
+    def test_a_refusal_is_delivered_on_the_stream(self, sse_app):
+        from sillo.testclient import TestClient
+
+        with TestClient(sse_app) as client:
+            response = client.post(
+                "/stream", json={"query": "{ __schema { types { name } } }"}
+            )
+
+        events = parse_events(response.text)
+        assert events[0][1]["errors"][0]["extensions"]["code"] == (
+            "OPERATION_NOT_PERMITTED"
+        )
+        assert events[-1][0] == "complete"
+
+    def test_buffering_proxies_are_told_not_to(self, sse_app):
+        from sillo.testclient import TestClient
+
+        with TestClient(sse_app) as client:
+            response = client.post("/stream", json={"query": "{ hello }"})
+
+        assert response.headers["cache-control"].startswith("no-cache")
+        assert response.headers["x-accel-buffering"] == "no"
