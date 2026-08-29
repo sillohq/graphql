@@ -82,3 +82,25 @@ class TestConstruction:
     def test_a_cost_can_be_added_afterwards(self, schema):
         graph = Graph(schema).cost("hello", 3)
         assert graph._costs["hello"] == 3
+
+
+class TestMounting:
+    def test_it_registers_on_an_application(self, schema):
+        app = SilloApp()
+        Graph(schema).mount(app)
+        assert any(route.name == "graphql" for route in app.get_all_routes())
+
+    def test_mount_returns_the_graph(self, schema):
+        assert isinstance(Graph(schema).mount(SilloApp()), Graph)
+
+    def test_it_registers_on_a_router(self, schema):
+        router = Router()
+        Graph(schema).mount(router)
+        assert router is not None
+
+    def test_it_is_kept_out_of_the_openapi_document(self, schema):
+        app = SilloApp()
+        Graph(schema).mount(app)
+        with GraphClient(app) as client:
+            document = client._client.get("/openapi.json")
+        assert "/graphql" not in document.json().get("paths", {})
