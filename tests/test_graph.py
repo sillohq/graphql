@@ -201,3 +201,42 @@ class TestErrorPolicy:
         with GraphClient(build(errors=policy)) as gql:
             result = gql.query("{ boom }", headers={"x-request-id": "abc"})
         assert "requestId" not in result.errors[0]["extensions"]
+
+
+class TestGuards:
+    def test_introspection_is_refused_by_default(self, gql):
+        result = gql.query("{ __schema { types { name } } }")
+        assert result.status_code == 403
+        assert result.codes == ["OPERATION_NOT_PERMITTED"]
+
+    def test_introspection_can_be_allowed(self, build):
+        with GraphClient(build(introspection=True)) as gql:
+            assert gql.query("{ __schema { types { name } } }").ok
+
+    def test_typename_is_not_introspection(self, gql):
+        assert gql.query("{ __typename }").ok
+
+    def test_introspection_nested_in_a_query_is_still_caught(self, gql):
+        assert gql.query("{ hello __schema { types { name } } }").status_code == 403
+
+    def test_an_operation_over_budget_is_refused(self, build):
+        with GraphClient(build(limits=Limits(depth=2))) as gql:
+            result = gql.query("{ tree { child { child { name } } } }")
+        assert result.codes == ["OPERATION_TOO_COMPLEX"]
+
+    def test_the_refusal_names_the_limit(self, build):
+        with GraphClient(build(limits=Limits(depth=2))) as gql:
+            result = gql.query("{ tree { child { name } } }")
+        assert result.errors[0]["extensions"]["limit"] == 2
+
+    def test_a_syntax_error_is_a_400(self, gql):
+        result = gql.query("{ this is not graphql")
+        assert result.status_code == 400
+        assert result.codes == ["BAD_USER_INPUT"]
+
+    def test_cost_is_reported_in_extensions(self, gql):
+        assert gql.query("{ hello }").extensions["cost"]["fields"] == 1
+
+    def test_cost_is_not_reported_when_analysis_is_off(self, build):
+        with GraphClient(build(limits=Limits(cost=None))) as gql:
+            assert "cost" not in gql.query("{ hello }").extensions
