@@ -240,3 +240,109 @@ class TestGuards:
     def test_cost_is_not_reported_when_analysis_is_off(self, build):
         with GraphClient(build(limits=Limits(cost=None))) as gql:
             assert "cost" not in gql.query("{ hello }").extensions
+
+
+class TestHooks:
+    def test_a_context_hook_adds_keys(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+        seen = []
+
+        @graph.context
+        def add(ctx):
+            return {"tenant": "acme"}
+
+        @graph.on_operation
+        def observe(result, context):
+            seen.append(context.extra.get("tenant"))
+
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            assert gql.query("{ hello }").ok
+        assert seen == ["acme"]
+
+    async def test_an_async_context_hook_is_awaited(self, schema):
+        graph = Graph(schema)
+
+        @graph.context
+        async def add(ctx):
+            return {"tenant": "acme"}
+
+        context = await graph._context(http=None, socket=None)
+        assert context.extra["tenant"] == "acme"
+
+    async def test_a_hook_returning_nothing_changes_nothing(self, schema):
+        graph = Graph(schema)
+
+        @graph.context
+        def add(ctx):
+            return None
+
+        context = await graph._context(http=None, socket=None)
+        assert context.extra == {}
+
+    async def test_connection_params_are_put_on_the_context(self, schema):
+        graph = Graph(schema)
+        context = await graph._context(http=None, socket=None, params={"t": 1})
+        assert context.extra["connection_params"] == {"t": 1}
+
+    async def test_a_connect_hook_contributes_to_the_context(self, schema):
+        graph = Graph(schema)
+
+        @graph.on_connect
+        async def authenticate(socket, params):
+            return {"user": params.get("token")}
+
+        assert await graph.connect(None, {"token": "abc"}) == {"user": "abc"}
+
+    async def test_a_sync_connect_hook_works(self, schema):
+        graph = Graph(schema)
+
+        @graph.on_connect
+        def authenticate(socket, params):
+            return {"seen": True}
+
+        assert await graph.connect(None, {}) == {"seen": True}
+
+    async def test_a_connect_hook_returning_nothing_is_ignored(self, schema):
+        graph = Graph(schema)
+
+        @graph.on_connect
+        def authenticate(socket, params):
+            return None
+
+        assert await graph.connect(None, {}) == {}
+
+    def test_an_operation_hook_sees_every_operation(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+        seen = []
+
+        @graph.on_operation
+        def observe(result, context):
+            seen.append((context.operation_name, len(result.errors)))
+
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            gql.query("query Named { hello }")
+        assert seen == [("Named", 0)]
+
+    async def test_an_async_operation_hook_is_awaited(self, schema):
+        graph = Graph(schema)
+        seen = []
+
+        @graph.on_operation
+        async def observe(result, context):
+            seen.append(result)
+
+        await graph.run({"query": "{ hello }"})
+        assert len(seen) == 1
+
+    def test_a_loader_can_be_declared_from_the_graph(self, schema):
+        graph = Graph(schema)
+
+        @graph.loader
+        async def load(keys):
+            return list(keys)
+
+        assert load.name == "load"
