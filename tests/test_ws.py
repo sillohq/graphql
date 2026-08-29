@@ -304,3 +304,74 @@ def graph_of(app):
         if owner is not None and type(owner).__name__ == "HttpTransport":
             return owner.graph
     raise AssertionError("no graph")
+
+
+class TestTransportUnits:
+    async def test_a_socket_that_never_initialises_is_closed(self, app):
+        from sillo_graphql.transport.ws import CLOSE_INIT_TIMEOUT, WebSocketTransport
+
+        transport = WebSocketTransport(graph_of(app), init_timeout=0.01)
+        socket = FakeSocket(hang=True)
+        await transport.handle(socket)
+        assert socket.closed[0] == CLOSE_INIT_TIMEOUT
+
+    async def test_the_subprotocol_is_negotiated_on_accept(self, app):
+        from sillo_graphql.transport.ws import WebSocketTransport
+
+        transport = WebSocketTransport(graph_of(app))
+        socket = FakeSocket()
+        await transport.handle(socket)
+        assert socket.accepted == PROTOCOL
+
+    async def test_a_send_that_fails_ends_the_session(self, app):
+        from sillo_graphql.transport.ws import WebSocketTransport
+
+        transport = WebSocketTransport(graph_of(app))
+        socket = FakeSocket(
+            [json.dumps({"type": "connection_init", "payload": {}})], fail_send=True
+        )
+        await transport.handle(socket)
+        assert socket.sent == []
+
+    async def test_a_socket_lost_mid_stream_stops_the_operation(self, app):
+        from sillo_graphql.transport.ws import WebSocketTransport, _Session
+
+        transport = WebSocketTransport(graph_of(app))
+        socket = FakeSocket()
+        session = _Session(transport, socket)
+        session.initialised = True
+        socket.fail_send = True
+        await session._operation("1", {"query": "subscription { ticks(count: 3) }"})
+        assert session.operations == {}
+
+    async def test_closing_an_already_closed_socket_is_harmless(self, app):
+        from sillo_graphql.transport.ws import WebSocketTransport, _Session
+
+        class Refuses(FakeSocket):
+            async def close(self, code=1000, reason=None):
+                raise RuntimeError("already closed")
+
+        session = _Session(WebSocketTransport(graph_of(app)), Refuses())
+        await session._close(4400, "x")
+
+    async def test_shutdown_cancels_what_is_still_running(self, app):
+        import asyncio
+
+        from sillo_graphql.transport.ws import WebSocketTransport, _Session
+
+        session = _Session(WebSocketTransport(graph_of(app)), FakeSocket())
+
+        async def forever():
+            await asyncio.sleep(3600)
+
+        task = asyncio.ensure_future(forever())
+        session.operations["1"] = task
+        await session.shutdown()
+        assert task.cancelled()
+        assert session.operations == {}
+
+    async def test_shutdown_with_nothing_running_is_a_no_op(self, app):
+        from sillo_graphql.transport.ws import WebSocketTransport, _Session
+
+        session = _Session(WebSocketTransport(graph_of(app)), FakeSocket())
+        await session.shutdown()
