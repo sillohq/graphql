@@ -389,3 +389,84 @@ def _ours(caplog) -> str:
         for record in caplog.records
         if record.name == "sillo.graphql"
     )
+
+
+class TestCoverageOfEdges:
+    """Paths that only appear under a particular configuration."""
+
+    def test_mounting_without_subscriptions_registers_no_socket(
+        self, query_only_schema
+    ):
+        app = SilloApp()
+        Graph(query_only_schema).mount(app)
+        assert all(route.name != "graphql-ws" for route in app.get_all_routes())
+
+    async def test_a_subscription_that_cannot_start_yields_one_result(self, schema):
+        graph = Graph(schema)
+        document = 'subscription { ticks(count: "not an int") }'
+        results = [result async for result in graph.stream({"query": document})]
+        assert len(results) == 1
+        assert results[0].errors
+
+    def test_the_explorer_advertises_the_socket_when_there_is_one(self, schema):
+        app = SilloApp(debug=False)
+        Graph(schema, ide=IDE(enabled=True)).mount(app)
+        with GraphClient(app) as gql:
+            page = gql.ide().text
+        assert "ws://" in page or "wss://" in page
+
+    def test_the_explorer_offers_no_socket_when_subscriptions_are_off(
+        self, query_only_schema
+    ):
+        app = SilloApp(debug=False)
+        Graph(query_only_schema, ide=IDE(enabled=True)).mount(app)
+        with GraphClient(app) as gql:
+            page = gql.ide().text
+        assert '"subscriptions": false' in page or '"subscriptions":false' in page
+
+    async def test_an_error_with_no_connection_has_no_correlation_id(self, schema):
+        result = await Graph(schema).run({"query": "{ boom }"})
+        assert "requestId" not in result.errors[0]["extensions"]
+
+    async def test_a_request_id_attribute_is_used_when_there_is_one(self, schema):
+        class Socket:
+            request_id = "from-attribute"
+            user = None
+
+        result = await Graph(schema).run({"query": "{ boom }"}, socket=Socket())
+        assert result.errors[0]["extensions"]["requestId"] == "from-attribute"
+
+    async def test_a_connection_without_headers_is_tolerated(self, schema):
+        class Socket:
+            user = None
+
+        result = await Graph(schema).run({"query": "{ boom }"}, socket=Socket())
+        assert "requestId" not in result.errors[0]["extensions"]
+
+    async def test_headers_without_a_request_id_add_nothing(self, schema):
+        class Socket:
+            user = None
+            headers = {}
+
+        result = await Graph(schema).run({"query": "{ boom }"}, socket=Socket())
+        assert "requestId" not in result.errors[0]["extensions"]
+
+    def test_an_unnamed_operation_stays_unnamed(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+        seen = []
+        graph.on_operation(lambda result, context: seen.append(context.operation_name))
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            gql.query("{ hello }")
+        assert seen == [None]
+
+    def test_two_named_operations_take_the_requested_one(self, schema):
+        app = SilloApp(debug=False)
+        graph = Graph(schema)
+        seen = []
+        graph.on_operation(lambda result, context: seen.append(context.operation_name))
+        graph.mount(app)
+        with GraphClient(app) as gql:
+            gql.query("query A { hello } query B { hello }", operation_name="B")
+        assert seen == ["B"]
