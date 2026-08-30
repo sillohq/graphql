@@ -470,3 +470,43 @@ class TestCoverageOfEdges:
         with GraphClient(app) as gql:
             gql.query("query A { hello } query B { hello }", operation_name="B")
         assert seen == ["B"]
+
+
+class TestOlderStrawberry:
+    async def test_a_non_iterable_subscribe_result_becomes_one_result(
+        self, schema, monkeypatch
+    ):
+        class Legacy:
+            """What older Strawberry hands back when a subscription cannot start."""
+
+            errors = [type("E", (), {"formatted": {"message": "cannot start"}})()]
+
+        graph = Graph(schema)
+
+        async def fake_subscribe(*args, **kwargs):
+            return Legacy()
+
+        monkeypatch.setattr(graph.schema, "subscribe", fake_subscribe)
+        results = [
+            result async for result in graph.stream({"query": "subscription { ticks }"})
+        ]
+        assert len(results) == 1
+        assert results[0].messages if hasattr(results[0], "messages") else True
+        assert results[0].errors[0]["message"] == "cannot start"
+
+    async def test_a_non_iterable_result_with_no_errors_is_empty(
+        self, schema, monkeypatch
+    ):
+        class Legacy:
+            pass
+
+        graph = Graph(schema)
+
+        async def fake_subscribe(*args, **kwargs):
+            return Legacy()
+
+        monkeypatch.setattr(graph.schema, "subscribe", fake_subscribe)
+        results = [
+            result async for result in graph.stream({"query": "subscription { ticks }"})
+        ]
+        assert results[0].errors == []
