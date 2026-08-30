@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The framework this package extends. `sillo.graphql` is only free to be
+# claimed by a framework that no longer ships one of its own, which is 1.0 —
+# so CI installs it from the branch rather than from PyPI.
+env:
+  FRAMEWORK: "git+https://github.com/sillohq/core.git@v1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+          pip install "$FRAMEWORK" strawberry-graphql
+
+      - name: Lint
+        run: ruff check sillo_graphql tests _sillo_graphql_bootstrap.py
+
+      - name: Format
+        run: ruff format --check sillo_graphql tests
+
+      - name: Types
+        run: mypy sillo_graphql
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install "$FRAMEWORK" strawberry-graphql
+          pip install pytest pytest-asyncio pytest-cov httpx
+          pip install -e .
+
+      # `fail_under = 100` lives in pyproject, so a line that stops being
+      # covered fails here rather than being noticed later.
+      - name: Test
+        run: pytest --cov --cov-report=term-missing
+
+  alias:
+    name: sillo.graphql, from a built wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel -o dist .
+
+      # The collision this layout exists to avoid: two distributions writing
+      # into one package directory. Checked on the artefact, not on a install,
+      # because an install can hide it behind whatever is already there.
+      - name: The wheel must write nothing into sillo/
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          intruders = [name for name in names if name.startswith("sillo/")]
+          assert not intruders, f"wheel writes into sillo/: {intruders}"
+          print("\n".join(sorted(names)))
+          PY
+
+      # The `.pth` runs at interpreter startup and only for a real install, so
+      # the alias is exercised against the wheel rather than the checkout.
+      #
+      # Which guarantee applies depends on the framework installed. Against one
+      # that no longer ships its own `sillo.graphql`, the alias must resolve.
+      # Against one that still does, the alias must *refuse* rather than
+      # silently shadow it. Both are contracts; the job asserts whichever is in
+      # force, and flips on its own when the framework drops the module.
+      - name: The alias resolves, or refuses — never shadows
+        run: |
+          python -m venv /tmp/v
+          /tmp/v/bin/pip install -q "$FRAMEWORK" strawberry-graphql mypy dist/*.whl
+          /tmp/v/bin/python - <<'PY'
+          import os
+
+          import sillo
+
+          package = os.path.dirname(sillo.__file__)
+          shipped = "graphql" in os.listdir(package)
+
+          if shipped:
+              try:
+                  import sillo.graphql  # noqa: F401
+              except ImportError as exc:
+                  assert "ships its own" in str(exc), exc
+                  print("framework still ships sillo.graphql; the alias refused")
+              else:
+                  raise AssertionError("the alias shadowed the framework's module")
+          else:
+              import sillo.graphql
+              import sillo.graphql.limits
+              import sillo_graphql
+
+              assert sillo.graphql is sillo_graphql, "two modules, not one"
+              assert sillo.graphql.limits is sillo_graphql.limits, "submodule diverged"
+              print("alias ok, sillo/ untouched")
+
+          import sillo_graphql  # noqa: F401  -- always importable either way
+          PY
+
+      # PEP 561 partial stubs: a checker must resolve `sillo.graphql` from
+      # them *and* still use the framework's own inline types for the rest.
+      - name: Type checkers resolve both
+        run: |
+          cat > /tmp/check.py <<'PY'
+          from sillo.graphql import Graph, Limits, not_found
+
+          limits: Limits = Limits(depth=3)
+          error = not_found("gone")
+          graph: type[Graph] = Graph
+          PY
+          /tmp/v/bin/python -m mypy /tmp/check.py
+
+      # Removing either distribution must leave the other whole. The failure
+      # this guards against is an empty `sillo/` left standing with no
+      # __init__.py in it, which shadows a later reinstall.
+      - name: Uninstalling either one leaves the other intact
+        run: |
+          /tmp/v/bin/pip uninstall -y -q sillo-graphql
+          /tmp/v/bin/python -c "import sillo; print('framework survives')"
+          /tmp/v/bin/pip install -q dist/*.whl
+          /tmp/v/bin/pip uninstall -y -q sillo-framework
+          /tmp/v/bin/python -c "import sillo_graphql; print('package survives')"
+          /tmp/v/bin/python - <<'PY'
+          import importlib.util
+
+          assert importlib.util.find_spec("sillo") is None, "headless sillo/ left behind"
+          print("no headless sillo/")
+          PY

@@ -129,6 +129,11 @@ class TestCollisionGuard:
         assert bootstrap._framework_ships_graphql() is None
 
 
+@pytest.mark.skipif(
+    bootstrap._framework_ships_graphql() is not None,
+    reason="the installed framework still ships its own sillo.graphql, which "
+    "the alias refuses rather than shadows -- see TestCollisionGuard",
+)
 class TestImportPath:
     def test_both_names_are_one_module(self):
         import sillo.graphql
