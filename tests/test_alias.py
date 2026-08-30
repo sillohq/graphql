@@ -36,6 +36,20 @@ class TestResolve:
         assert bootstrap._resolve(name) is None
 
 
+@pytest.fixture
+def unclaimed(monkeypatch):
+    """Pretend the framework ships no ``sillo.graphql`` of its own.
+
+    These test how the finder *resolves* a name. Whether it should resolve at
+    all against a framework that still ships one is a separate contract, with
+    its own tests in :class:`TestCollisionGuard` — and leaving the guard armed
+    here would make the outcome depend on which framework happens to be
+    installed.
+    """
+    monkeypatch.setattr(bootstrap, "_framework_ships_graphql", lambda: None)
+
+
+@pytest.mark.usefixtures("unclaimed")
 class TestFinder:
     def test_it_answers_for_the_alias(self):
         spec = bootstrap._AliasFinder().find_spec("sillo.graphql")
