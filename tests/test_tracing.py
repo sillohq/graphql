@@ -113,3 +113,53 @@ class TestMetrics:
 
         assert OperationStats().average == 0.0
         assert OperationStats().as_dict()["average_cost"] == 0.0
+
+
+class TestOpenTelemetry:
+    def test_the_span_is_back_dated_so_its_duration_is_honest(self):
+        spans = []
+
+        class Span:
+            def __init__(self, name, start_time):
+                self.name, self.start_time = name, start_time
+                self.attributes, self.end_time = {}, None
+
+            def set_attribute(self, key, value):
+                self.attributes[key] = value
+
+            def end(self, end_time):
+                self.end_time = end_time
+                spans.append(self)
+
+        class Tracer:
+            def start_span(self, name, start_time):
+                return Span(name, start_time)
+
+        opentelemetry(Tracer())(Result(data={}), context(age=0.25))
+
+        span = spans[0]
+        assert span.name == "graphql Read"
+        assert span.attributes["graphql.cost"] == 12
+        assert span.attributes["graphql.errors"] == 0
+        # A quarter of a second, in nanoseconds, allowing for scheduling.
+        assert span.end_time - span.start_time >= 200_000_000
+
+    def test_an_unmeasured_cost_is_left_off_the_span(self):
+        spans = []
+
+        class Span:
+            def __init__(self):
+                self.attributes = {}
+
+            def set_attribute(self, key, value):
+                self.attributes[key] = value
+
+            def end(self, end_time):
+                spans.append(self)
+
+        class Tracer:
+            def start_span(self, name, start_time):
+                return Span()
+
+        opentelemetry(Tracer())(Result(data={}), context(cost=None))
+        assert "graphql.cost" not in spans[0].attributes
