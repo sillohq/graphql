@@ -34,3 +34,32 @@ class TestResolve:
     )
     def test_anything_else_is_declined(self, name):
         assert bootstrap._resolve(name) is None
+
+
+class TestFinder:
+    def test_it_answers_for_the_alias(self):
+        spec = bootstrap._AliasFinder().find_spec("sillo.graphql")
+        assert spec is not None
+        assert spec.name == "sillo.graphql"
+
+    def test_it_declines_everything_else(self):
+        assert bootstrap._AliasFinder().find_spec("json") is None
+
+    def test_the_spec_carries_the_package_s_search_path(self):
+        spec = bootstrap._AliasFinder().find_spec("sillo.graphql")
+        assert spec.submodule_search_locations is not None
+
+    def test_a_submodule_spec_has_no_search_path(self):
+        spec = bootstrap._AliasFinder().find_spec("sillo.graphql.errors")
+        assert spec.submodule_search_locations is None
+
+    def test_it_declines_when_the_target_is_missing(self, monkeypatch):
+        monkeypatch.setattr(bootstrap, "REAL", "no_such_package_anywhere")
+        assert bootstrap._AliasFinder().find_spec("sillo.graphql") is None
+
+    def test_it_declines_rather_than_raising_on_a_broken_target(self, monkeypatch):
+        def explode(name):
+            raise ImportError("half-installed")
+
+        monkeypatch.setattr(bootstrap, "find_spec", explode)
+        assert bootstrap._AliasFinder().find_spec("sillo.graphql") is None
