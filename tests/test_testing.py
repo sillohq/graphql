@@ -110,3 +110,16 @@ class TestGraphClient:
         app = build(path="/api/graph")
         with GraphClient(app, path="/api/graph") as gql:
             assert gql.query("{ hello }").ok
+
+
+class FakeResponse:
+    def __init__(self, text, status_code=200, body=None):
+        self.text = text
+        self.status_code = status_code
+        self.headers = {}
+        self._body = body
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("not json")
+        return self._body
