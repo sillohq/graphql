@@ -127,3 +127,24 @@ class TestCollisionGuard:
     def test_a_framework_that_is_not_imported_yet_is_fine(self, monkeypatch):
         monkeypatch.delitem(sys.modules, "sillo", raising=False)
         assert bootstrap._framework_ships_graphql() is None
+
+
+class TestImportPath:
+    def test_both_names_are_one_module(self):
+        import sillo.graphql
+
+        import sillo_graphql
+
+        assert sillo.graphql is sillo_graphql
+
+    def test_a_submodule_imports_under_the_alias(self):
+        from sillo.graphql.limits import analyze
+
+        from sillo_graphql.limits import analyze as same
+
+        assert analyze is same
+
+    def test_the_public_names_are_reachable(self):
+        from sillo.graphql import Graph, field, not_found
+
+        assert Graph and field and not_found
