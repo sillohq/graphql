@@ -86,3 +86,44 @@ class TestInstall:
         before = len(sys.meta_path)
         assert bootstrap.install() is False
         assert len(sys.meta_path) == before
+
+
+class TestCollisionGuard:
+    def test_a_framework_that_ships_its_own_is_refused(self, monkeypatch, tmp_path):
+        shipped = tmp_path / "graphql"
+        shipped.mkdir()
+        (shipped / "__init__.py").write_text("")
+
+        class FakeSillo:
+            __path__ = [str(tmp_path)]
+
+        monkeypatch.setitem(sys.modules, "sillo", FakeSillo())
+        with pytest.raises(ImportError, match="ships its own"):
+            bootstrap._AliasFinder().find_spec("sillo.graphql")
+
+    def test_a_single_module_form_is_also_caught(self, monkeypatch, tmp_path):
+        (tmp_path / "graphql.py").write_text("")
+
+        class FakeSillo:
+            __path__ = [str(tmp_path)]
+
+        monkeypatch.setitem(sys.modules, "sillo", FakeSillo())
+        with pytest.raises(ImportError, match="ships its own"):
+            bootstrap._AliasFinder().find_spec("sillo.graphql")
+
+    def test_the_message_says_what_to_do(self, monkeypatch, tmp_path):
+        (tmp_path / "graphql.py").write_text("")
+
+        class FakeSillo:
+            __path__ = [str(tmp_path)]
+
+        monkeypatch.setitem(sys.modules, "sillo", FakeSillo())
+        with pytest.raises(ImportError, match=re.escape("sillo-framework>=1.0")):
+            bootstrap._AliasFinder().find_spec("sillo.graphql")
+
+    def test_nothing_shipped_means_no_guard(self):
+        assert bootstrap._framework_ships_graphql() is None
+
+    def test_a_framework_that_is_not_imported_yet_is_fine(self, monkeypatch):
+        monkeypatch.delitem(sys.modules, "sillo", raising=False)
+        assert bootstrap._framework_ships_graphql() is None
