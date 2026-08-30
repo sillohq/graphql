@@ -137,3 +137,142 @@ class TestResultParsing:
 
         result = _result(FakeResponse("[]", body=[1, 2]))
         assert "expected an object" in result.messages[0]
+
+
+class TestSubscriptionStreamUnits:
+    """The handshake failures a working endpoint cannot produce."""
+
+    def stream(self, messages, *, on_send=None):
+        import json as jsonlib
+
+        from sillo_graphql.testing import SubscriptionStream
+
+        class Socket:
+            def __init__(self):
+                self.sent = []
+
+            def send_text(self, text):
+                if on_send is not None:
+                    on_send(text)
+                self.sent.append(jsonlib.loads(text))
+
+            def receive_text(self):
+                return messages.pop(0)
+
+        class Session:
+            def __init__(self):
+                self.socket = Socket()
+                self.exited = False
+
+            def __enter__(self):
+                return self.socket
+
+            def __exit__(self, *exc):
+                self.exited = True
+
+        class Client:
+            def __init__(self):
+                self.session = Session()
+
+            def websocket_connect(self, path, **kwargs):
+                return self.session
+
+        stream = SubscriptionStream(
+            Client(),
+            "/graphql",
+            "subscription { ticks }",
+            variables=None,
+            connection_params=None,
+            timeout=1.0,
+        )
+        return stream
+
+    async def test_a_missing_ack_is_a_clear_failure(self):
+        import json as jsonlib
+
+        stream = self.stream([jsonlib.dumps({"type": "connection_error"})])
+        with pytest.raises(AssertionError, match="expected connection_ack"):
+            await stream.__aenter__()
+
+    async def test_variables_are_sent_when_there_are_some(self):
+        import json as jsonlib
+
+        from sillo_graphql.testing import SubscriptionStream
+
+        sent = []
+
+        class Socket:
+            def send_text(self, text):
+                sent.append(jsonlib.loads(text))
+
+            def receive_text(self):
+                return jsonlib.dumps({"type": "connection_ack"})
+
+        class Session:
+            def __enter__(self):
+                return Socket()
+
+            def __exit__(self, *exc):
+                return None
+
+        class Client:
+            def websocket_connect(self, path, **kwargs):
+                return Session()
+
+        stream = SubscriptionStream(
+            Client(),
+            "/graphql",
+            "subscription ($n: Int!) { ticks(count: $n) }",
+            variables={"n": 2},
+            connection_params={"token": "abc"},
+            timeout=1.0,
+        )
+        await stream.__aenter__()
+        assert sent[0]["payload"] == {"token": "abc"}
+        assert sent[1]["payload"]["variables"] == {"n": 2}
+
+    async def test_a_closed_socket_on_exit_is_tolerated(self):
+        import json as jsonlib
+
+        from sillo_graphql.testing import SubscriptionStream
+
+        class Socket:
+            def send_text(self, text):
+                message = jsonlib.loads(text)
+                if message["type"] == "complete":
+                    raise RuntimeError("already closed")
+
+            def receive_text(self):
+                return jsonlib.dumps({"type": "connection_ack"})
+
+        class Session:
+            def __enter__(self):
+                return Socket()
+
+            def __exit__(self, *exc):
+                return None
+
+        class Client:
+            def websocket_connect(self, path, **kwargs):
+                return Session()
+
+        stream = SubscriptionStream(
+            Client(),
+            "/graphql",
+            "subscription { ticks }",
+            variables=None,
+            connection_params=None,
+            timeout=1.0,
+        )
+        await stream.__aenter__()
+        await stream.__aexit__(None, None, None)
+
+    async def test_a_ping_between_values_is_skipped(self, app):
+        from sillo_graphql.testing import GraphClient
+
+        with GraphClient(app) as gql:
+            async with gql.subscribe("subscription { ticks(count: 1) }") as stream:
+                # Provoke a pong in the middle of the stream; `next` should
+                # step over it rather than return it as a value.
+                stream._send({"type": "ping"})
+                assert (await stream.next()).data == {"ticks": 0}
