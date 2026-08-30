@@ -74,3 +74,15 @@ class TestLoader:
 
     def test_executing_it_again_does_nothing(self):
         assert bootstrap._AliasLoader("sillo_graphql").exec_module(object()) is None
+
+
+class TestInstall:
+    def test_the_finder_is_registered(self):
+        assert any(
+            isinstance(finder, bootstrap._AliasFinder) for finder in sys.meta_path
+        )
+
+    def test_installing_twice_adds_nothing(self):
+        before = len(sys.meta_path)
+        assert bootstrap.install() is False
+        assert len(sys.meta_path) == before
