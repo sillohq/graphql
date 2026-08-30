@@ -63,3 +63,14 @@ class TestFinder:
 
         monkeypatch.setattr(bootstrap, "find_spec", explode)
         assert bootstrap._AliasFinder().find_spec("sillo.graphql") is None
+
+
+class TestLoader:
+    def test_it_hands_back_the_module_already_imported(self):
+        import sillo_graphql
+
+        loader = bootstrap._AliasLoader("sillo_graphql")
+        assert loader.create_module(None) is sillo_graphql
+
+    def test_executing_it_again_does_nothing(self):
+        assert bootstrap._AliasLoader("sillo_graphql").exec_module(object()) is None
