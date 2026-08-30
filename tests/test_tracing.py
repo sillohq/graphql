@@ -64,3 +64,52 @@ class TestOperationLog:
         with caplog.at_level(logging.INFO, logger="my.app"):
             OperationLog(logger)(Result(data={}), context())
         assert any(record.name == "my.app" for record in caplog.records)
+
+
+class TestMetrics:
+    def test_it_counts_per_operation(self):
+        metrics = Metrics()
+        metrics(Result(data={}), context("Read"))
+        metrics(Result(data={}), context("Read"))
+        metrics(Result(data={}), context("Write"))
+
+        snapshot = metrics.snapshot()
+        assert snapshot["Read"]["count"] == 2
+        assert snapshot["Write"]["count"] == 1
+
+    def test_errors_are_counted_separately(self):
+        metrics = Metrics()
+        metrics(Result(errors=[{"message": "x"}]), context())
+        assert metrics.snapshot()["Read"]["errors"] == 1
+
+    def test_the_slowest_is_remembered(self):
+        metrics = Metrics()
+        metrics(Result(data={}), context(age=0.5))
+        metrics(Result(data={}), context(age=0.01))
+        assert metrics.snapshot()["Read"]["slowest_seconds"] >= 0.5
+
+    def test_the_average_cost_is_reported(self):
+        metrics = Metrics()
+        metrics(Result(data={}), context(cost=10))
+        metrics(Result(data={}), context(cost=20))
+        assert metrics.snapshot()["Read"]["average_cost"] == 15
+
+    def test_an_unmeasured_cost_counts_as_nothing(self):
+        metrics = Metrics()
+        metrics(Result(data={}), context(cost=None))
+        assert metrics.snapshot()["Read"]["average_cost"] == 0
+
+    def test_an_empty_snapshot_is_empty(self):
+        assert Metrics().snapshot() == {}
+
+    def test_it_can_be_reset(self):
+        metrics = Metrics()
+        metrics(Result(data={}), context())
+        metrics.reset()
+        assert metrics.snapshot() == {}
+
+    def test_a_stats_object_averages_nothing_before_anything_runs(self):
+        from sillo_graphql.tracing import OperationStats
+
+        assert OperationStats().average == 0.0
+        assert OperationStats().as_dict()["average_cost"] == 0.0
