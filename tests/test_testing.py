@@ -123,3 +123,17 @@ class FakeResponse:
         if self._body is None:
             raise ValueError("not json")
         return self._body
+
+
+class TestResultParsing:
+    def test_a_non_json_response_becomes_an_error(self):
+        from sillo_graphql.testing import _result
+
+        result = _result(FakeResponse("<html>500</html>"))
+        assert result.messages == ["<html>500</html>"]
+
+    def test_a_json_array_becomes_an_error(self):
+        from sillo_graphql.testing import _result
+
+        result = _result(FakeResponse("[]", body=[1, 2]))
+        assert "expected an object" in result.messages[0]
