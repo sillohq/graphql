@@ -164,7 +164,9 @@ class TestSubscribe:
     def test_completing_stops_the_stream(self, raw):
         with raw() as session:
             session.init()
-            session.subscribe("subscription { ticks(count: 100) }")
+            # `slow` is always mid-await, so the cancel lands on a running
+            # operation rather than on one that already finished.
+            session.subscribe("subscription { slow(delay: 0.02) }")
             session.recv()
             session.send(type="complete", id="1")
             session.send(type="ping")

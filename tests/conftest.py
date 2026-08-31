@@ -8,6 +8,7 @@ so the tests exercise behaviour rather than set up a new schema each time.
 
 from __future__ import annotations
 
+import asyncio
 import typing
 
 import pytest
@@ -96,6 +97,21 @@ class Subscription:
     async def failing() -> typing.AsyncGenerator[int, None]:
         yield 1
         raise RuntimeError("subscription broke")
+
+    @subscription
+    async def slow(delay: float = 0.05) -> typing.AsyncGenerator[int, None]:
+        """Never ends, and waits between values.
+
+        `ticks` yields without ever awaiting, so on a fast machine the whole
+        stream can finish before an unsubscribe arrives — and the cancellation
+        paths that unsubscribe exists to exercise are never reached. This one
+        is always mid-await when the message lands.
+        """
+        index = 0
+        while True:
+            await asyncio.sleep(delay)
+            yield index
+            index += 1
 
 
 @pytest.fixture(scope="session")

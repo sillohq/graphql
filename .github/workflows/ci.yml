@@ -145,16 +145,22 @@ jobs:
       # Removing either distribution must leave the other whole. The failure
       # this guards against is an empty `sillo/` left standing with no
       # __init__.py in it, which shadows a later reinstall.
+      #
+      # Run from /tmp, not the checkout: with the repository on sys.path these
+      # would import the source tree and prove nothing about the install.
       - name: Uninstalling either one leaves the other intact
+        working-directory: /tmp
         run: |
           /tmp/v/bin/pip uninstall -y -q sillo-graphql
           /tmp/v/bin/python -c "import sillo; print('framework survives')"
-          /tmp/v/bin/pip install -q dist/*.whl
+          /tmp/v/bin/pip install -q $GITHUB_WORKSPACE/dist/*.whl
           /tmp/v/bin/pip uninstall -y -q sillo-framework
-          /tmp/v/bin/python -c "import sillo_graphql; print('package survives')"
           /tmp/v/bin/python - <<'PY'
           import importlib.util
 
+          # `sillo_graphql` needs the framework to import, so it is not asked
+          # to. What must be true is that nothing of `sillo` is left behind:
+          # a directory with no __init__.py in it would shadow a reinstall.
           assert importlib.util.find_spec("sillo") is None, "headless sillo/ left behind"
           print("no headless sillo/")
           PY
