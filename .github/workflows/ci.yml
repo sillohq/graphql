@@ -8,6 +8,13 @@ on:
 # The framework this package extends. `sillo.graphql` is only free to be
 # claimed by a framework that no longer ships one of its own, which is 1.0 —
 # so CI installs it from the branch rather than from PyPI.
+#
+# Installed first and explicitly, and this package then installed with
+# `--no-deps`: the declared floor is `sillo-framework>=1.0`, which is true of
+# what the branch *is* and not of what its metadata still calls itself (0.3.1).
+# Resolving against PyPI instead would find no 1.0 at all. Dropping the pin to
+# match the stale version would be the wrong repair — it would let the package
+# install against a framework it cannot run on.
 env:
   FRAMEWORK: "git+https://github.com/sillohq/core.git@v1"
 
@@ -53,7 +60,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install "$FRAMEWORK" strawberry-graphql
           pip install pytest pytest-asyncio pytest-cov httpx
-          pip install -e .
+          pip install -e . --no-deps
 
       # `fail_under = 100` lives in pyproject, so a line that stops being
       # covered fails here rather than being noticed later.
@@ -100,7 +107,8 @@ jobs:
       - name: The alias resolves, or refuses — never shadows
         run: |
           python -m venv /tmp/v
-          /tmp/v/bin/pip install -q "$FRAMEWORK" strawberry-graphql mypy dist/*.whl
+          /tmp/v/bin/pip install -q "$FRAMEWORK" strawberry-graphql mypy
+          /tmp/v/bin/pip install -q --no-deps dist/*.whl
           /tmp/v/bin/python - <<'PY'
           import os
 
@@ -153,7 +161,7 @@ jobs:
         run: |
           /tmp/v/bin/pip uninstall -y -q sillo-graphql
           /tmp/v/bin/python -c "import sillo; print('framework survives')"
-          /tmp/v/bin/pip install -q $GITHUB_WORKSPACE/dist/*.whl
+          /tmp/v/bin/pip install -q --no-deps $GITHUB_WORKSPACE/dist/*.whl
           /tmp/v/bin/pip uninstall -y -q sillo-framework
           /tmp/v/bin/python - <<'PY'
           import importlib.util
