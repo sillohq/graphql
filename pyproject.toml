@@ -29,8 +29,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 # Strawberry owns the schema; this package owns everything around it.
+#
+# 1.0 is the floor, not 0.3: this needs the context-handler API, and it claims
+# `sillo.graphql`, which the framework shipped itself until then. Declaring the
+# floor honestly is what makes pip refuse the combination rather than leaving
+# the import hook to refuse it at runtime.
 dependencies = [
-    "sillo-framework>=0.3",
+    "sillo-framework>=1.0",
     "strawberry-graphql>=0.219.0",
 ]
 

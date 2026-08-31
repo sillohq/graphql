@@ -223,7 +223,12 @@ can migrate one resolver at a time.
 
 ## Requirements
 
-Python 3.10+, `sillo-framework`, `strawberry-graphql`.
+Python 3.10+, `sillo-framework` 1.0 or newer, `strawberry-graphql`.
+
+1.0 is the floor for two reasons: the resolver bridge is built on the
+context-handler API, and `sillo.graphql` was the framework's own import path
+until then. Against an older framework the alias refuses to load rather than
+shadowing it — but the version pin is what stops you getting that far.
 
 ## License
 
