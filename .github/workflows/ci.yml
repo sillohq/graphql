@@ -7,7 +7,8 @@ on:
 
 # The framework this package extends. `sillo.graphql` is only free to be
 # claimed by a framework that no longer ships one of its own, which is 1.0 —
-# so CI installs it from the branch rather than from PyPI.
+# so CI installs it from the 1.0 branch rather than from PyPI. That branch is
+# `main`; it was `v1` until the 1.0 line took the default branch name.
 #
 # Installed first and explicitly, and this package then installed with
 # `--no-deps`: the declared floor is `sillo-framework>=1.0`, which is true of
@@ -16,7 +17,7 @@ on:
 # match the stale version would be the wrong repair — it would let the package
 # install against a framework it cannot run on.
 env:
-  FRAMEWORK: "git+https://github.com/sillohq/core.git@v1"
+  FRAMEWORK: "git+https://github.com/sillohq/core.git@main"
 
 jobs:
   lint:
