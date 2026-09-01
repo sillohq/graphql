@@ -72,9 +72,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The newest supported interpreter. The matrix already exercises the
+      # alias on every version through the editable install, which carries the
+      # same .pth -- so the one place worth spending a separate job is the
+      # wheel path on the interpreter most likely to have changed underneath
+      # site-packages.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Build the wheel
         run: |
