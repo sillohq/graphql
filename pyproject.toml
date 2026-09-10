@@ -40,6 +40,13 @@ dependencies = [
     "strawberry-graphql>=0.219.0",
 ]
 
+# `>=1.0` cannot resolve against PyPI yet (the branch that is 1.0 still calls
+# itself 0.3.x). uv-based dev takes it from that branch; dev-only, never
+# written into the wheel. Drop once 1.0 publishes. CI installs it the same
+# way via the FRAMEWORK env var.
+[tool.uv.sources]
+sillo-framework = { git = "https://github.com/sillohq/core.git", branch = "main" }
+
 [project.urls]
 Homepage = "https://sillo.build"
 Documentation = "https://docs.sillo.build/packages/graphql/"
