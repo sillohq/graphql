@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Resolver `Depend(...)` stopped resolving on newer framework builds.** Sillo
+  v1's `get_dependant` treats a callable's first parameter as the context slot
+  and only scans the parameters after it for `Depend` markers. The stand-in
+  signature this package builds for a resolver's dependencies had no such slot,
+  so its first dependency was skipped and injected as `None`. It now carries a
+  leading context parameter. A resolver dependency that took no arguments must
+  now take a leading one (`def get_db(_): ...`), matching the framework's rule
+  for every dependency.
+
+### Added
+
+- A `release` workflow: pushing a `sillo-graphql-v<version>` tag checks the
+  three version strings agree, runs the suite, builds, verifies the wheel
+  carries the alias `.pth` and the PEP 561 stubs and writes nothing into
+  `sillo/`, and publishes (trusted publishing, or `PYPI_TOKEN`).
+
 ## [0.1.0]
 
 First release. Extracted from the framework's `sillo.graphql` module, and

@@ -157,20 +157,30 @@ def _split(
 
 
 def _carrier(depends: dict[str, typing.Any]) -> typing.Callable[..., None]:
-    """A stand-in callable whose only parameters are the ``Depend`` ones.
+    """A stand-in callable whose parameters are the ``Depend`` ones.
 
     ``sillo``'s dependency solver works from a callable's signature. Handing
     it the resolver itself would make it read the GraphQL arguments as query
     parameters, so it is given this instead — same dependencies, nothing else.
+
+    The leading ``_ctx`` parameter is the context slot every ``sillo`` v1
+    callable carries: ``get_dependant`` scans the parameters *after* it for
+    ``Depend`` markers, so without a first parameter to skip the first real
+    dependency would be dropped.
     """
 
-    def carry(**kwargs: typing.Any) -> None:  # pragma: no cover - never called
+    def carry(  # pragma: no cover - never called, only its signature is read
+        *args: typing.Any, **kwargs: typing.Any
+    ) -> None:
         """Never invoked; only its signature is read."""
 
     carry.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
         [
-            inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=marker)
-            for name, marker in depends.items()
+            inspect.Parameter("_ctx", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+            *(
+                inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=marker)
+                for name, marker in depends.items()
+            ),
         ]
     )
     return carry

@@ -44,7 +44,7 @@ class TestSignature:
         assert "ctx" not in schema.as_str()
 
     def test_a_depend_default_is_injected_and_hidden(self):
-        async def dependency():
+        async def dependency(_):
             return "injected"
 
         @strawberry.type
@@ -150,7 +150,7 @@ class TestExecution:
         assert result.data == {"method": "POST"}
 
     async def test_a_dependency_is_resolved(self, http_context):
-        async def dependency():
+        async def dependency(_):
             return "from di"
 
         @strawberry.type
@@ -166,7 +166,7 @@ class TestExecution:
     async def test_two_resolvers_share_one_dependency_value(self, http_context):
         calls = []
 
-        async def dependency():
+        async def dependency(_):
             calls.append(1)
             return len(calls)
 
@@ -188,7 +188,7 @@ class TestExecution:
     async def test_a_generator_dependency_is_closed_afterwards(self, http_context):
         closed = []
 
-        async def dependency():
+        async def dependency(_):
             # `finally`, because teardown runs through `aclose()`, which
             # raises GeneratorExit at the yield — bare code after it never
             # runs, here or in a route.
@@ -378,7 +378,7 @@ class TestSubscription:
     async def test_a_dependency_is_closed_when_the_stream_ends(self):
         closed = []
 
-        async def dependency():
+        async def dependency(_):
             try:
                 yield "open"
             finally:
@@ -435,7 +435,7 @@ class TestSyncDependencies:
     async def test_a_sync_generator_dependency_is_closed(self, http_context):
         closed = []
 
-        def dependency():
+        def dependency(_):
             try:
                 yield "open"
             finally:

@@ -21,7 +21,7 @@ from sillo_graphql.context import GraphContext
 pytest_plugins: list[str] = []
 
 
-async def get_db() -> dict[str, dict[int, str]]:
+async def get_db(_) -> dict[str, dict[int, str]]:
     """A stand-in dependency, so `Depend` is exercised for real."""
     return {"users": {1: "Ada", 2: "Grace"}}
 

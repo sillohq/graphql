@@ -1,0 +1,90 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'sillo-graphql-v*'
+
+# `sillo.graphql` is only free to be claimed by a framework that no longer
+# ships one of its own, which is 1.0. That branch is `main`; its metadata still
+# says 0.3.x, so the floor `sillo-framework>=1.0` cannot resolve against PyPI.
+# Install it from the branch, then this package with `--no-deps`.
+env:
+  FRAMEWORK: "git+https://github.com/sillohq/core.git@main"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Trusted publishing, used when PYPI_TOKEN is not set.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read the tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#sillo-graphql-v}" >> "$GITHUB_OUTPUT"
+
+      # Three places carry the version; a release that reports one it is not is
+      # worse than one that fails to build.
+      - name: The tag, pyproject.toml and __version__ must agree
+        run: |
+          tag='${{ steps.version.outputs.version }}'
+          project=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          module=$(grep -m1 '^__version__' sillo_graphql/__init__.py | cut -d'"' -f2)
+
+          echo "tag=$tag pyproject=$project module=$module"
+
+          if [ "$tag" != "$project" ] || [ "$tag" != "$module" ]; then
+            echo "These disagree. Bump all three and tag again."
+            exit 1
+          fi
+
+      - name: Install
+        run: |
+          uv venv
+          uv pip install "$FRAMEWORK" strawberry-graphql
+          uv pip install pytest pytest-asyncio pytest-cov httpx
+          uv pip install -e . --no-deps
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Build
+        run: uv build
+
+      # The collision this layout exists to avoid: two distributions writing
+      # into one package directory. Checked on the artefact, not on an install.
+      - name: The wheel must write nothing into sillo/
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          intruders = [n for n in names if n.startswith("sillo/")]
+          assert not intruders, f"wheel writes into sillo/: {intruders}"
+          assert "sillo_graphql.pth" in names, "the alias .pth is missing"
+          assert "_sillo_graphql_bootstrap.py" in names, "the bootstrap is missing"
+          assert "sillo-stubs/py.typed" in names, "the PEP 561 stub marker is missing"
+          assert "sillo-stubs/graphql.pyi" in names, "the sillo.graphql stub is missing"
+          print("wheel carries the alias, the bootstrap and the stubs, and stays out of sillo/")
+          PY
+
+      - name: Publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -n "$UV_PUBLISH_TOKEN" ]; then
+            uv publish
+          else
+            uv publish --trusted-publishing always
+          fi
