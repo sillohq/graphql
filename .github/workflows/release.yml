@@ -5,10 +5,10 @@ on:
     tags:
       - 'sillo-graphql-v*'
 
-# `sillo.graphql` is only free to be claimed by a framework that no longer
-# ships one of its own, which is 1.0. That branch is `main`; its metadata still
-# says 0.3.x, so the floor `sillo-framework>=1.0` cannot resolve against PyPI.
-# Install it from the branch, then this package with `--no-deps`.
+# The framework this package extends. `sillo-framework>=1.0` now resolves on
+# PyPI -- 1.0.0a1 is published -- but a pre-release only, and this package
+# tracks the 1.0 branch rather than the last tag cut from it. Install the
+# framework from `main`, then this package with `--no-deps`.
 env:
   FRAMEWORK: "git+https://github.com/sillohq/core.git@main"
 
@@ -72,11 +72,11 @@ jobs:
           names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
           intruders = [n for n in names if n.startswith("sillo/")]
           assert not intruders, f"wheel writes into sillo/: {intruders}"
-          assert "sillo_graphql.pth" in names, "the alias .pth is missing"
-          assert "_sillo_graphql_bootstrap.py" in names, "the bootstrap is missing"
-          assert "sillo-stubs/py.typed" in names, "the PEP 561 stub marker is missing"
-          assert "sillo-stubs/graphql.pyi" in names, "the sillo.graphql stub is missing"
-          print("wheel carries the alias, the bootstrap and the stubs, and stays out of sillo/")
+          assert "sillo_graphql/__init__.py" in names, "the package is missing"
+          assert "sillo_graphql/py.typed" in names, "the PEP 561 marker is missing"
+          strays = [n for n in names if n.endswith(".pth") or n.startswith("sillo-stubs/")]
+          assert not strays, f"alias machinery is back in the wheel: {strays}"
+          print("wheel ships sillo_graphql only, and stays out of sillo/")
           PY
 
       - name: Publish

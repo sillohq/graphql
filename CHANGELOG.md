@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **The `sillo.graphql` import alias.** `sillo_graphql` is now the only import
+  path:
+
+  ```python
+  from sillo_graphql import Graph, field    # was: from sillo.graphql import ...
+  ```
+
+  The alias was a meta-path finder in `_sillo_graphql_bootstrap.py`, a
+  `sillo_graphql.pth` registering it at interpreter startup, and PEP 561 stubs
+  under `sillo-stubs/` to serve type checkers, which never run import hooks.
+  That is three mechanisms, a `.pth` executing on every interpreter start in
+  every environment the package is installed in, and a second set of type
+  declarations to keep in step with the real ones — so that an import could
+  read as part of the framework. A plain top-level package needs none of it.
+
+  `_sillo_graphql_bootstrap.py`, `sillo_graphql.pth` and `sillo-stubs/` are
+  gone, along with the `force-include` blocks that shipped them.
+
+### Added
+
+- **`sillo_graphql/py.typed`.** The package claimed `Typing :: Typed` but
+  shipped no PEP 561 marker of its own — type checkers were served entirely by
+  `sillo-stubs/`. Removing the stubs without this would have silently made the
+  package untyped for consumers. Its inline annotations are now the single
+  source of truth.
+
 ### Fixed
 
 - **Resolver `Depend(...)` stopped resolving on newer framework builds.** Sillo

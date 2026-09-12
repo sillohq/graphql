@@ -31,10 +31,10 @@ classifiers = [
 ]
 # Strawberry owns the schema; this package owns everything around it.
 #
-# 1.0 is the floor, not 0.3: this needs the context-handler API, and it claims
-# `sillo.graphql`, which the framework shipped itself until then. Declaring the
-# floor honestly is what makes pip refuse the combination rather than leaving
-# the import hook to refuse it at runtime.
+# 1.0 is the floor, not 0.3: the resolver bridge is built on the
+# context-handler API, which does not exist before it. Declaring the floor
+# honestly is what makes pip refuse the combination up front rather than
+# leaving it to fail on the first resolver.
 dependencies = [
     "sillo-framework>=1.0",
     "strawberry-graphql>=0.219.0",
@@ -64,21 +64,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-# `sillo-stubs` serves type checkers, which never run the import hook below.
-packages = ["sillo_graphql", "sillo-stubs"]
-
-# The bootstrap and its .pth land at the site-packages root. The .pth is what
-# runs at interpreter startup and registers the `sillo.graphql` alias; see
-# _sillo_graphql_bootstrap.py for why nothing is written into `sillo/`.
-[tool.hatch.build.targets.wheel.force-include]
-"_sillo_graphql_bootstrap.py" = "_sillo_graphql_bootstrap.py"
-"sillo_graphql.pth" = "sillo_graphql.pth"
-
-# The same two files for `pip install -e .`, so the alias works in a
-# development checkout and not only from a built wheel.
-[tool.hatch.build.targets.editable.force-include]
-"_sillo_graphql_bootstrap.py" = "_sillo_graphql_bootstrap.py"
-"sillo_graphql.pth" = "sillo_graphql.pth"
+packages = ["sillo_graphql"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -87,11 +73,6 @@ testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning:strawberry.*"]
 
 [tool.coverage.run]
-# `_sillo_graphql_bootstrap` is deliberately not measured. Its `.pth` imports
-# it at interpreter startup, before coverage exists, so its `def` and `class`
-# statements never run under the tracer however thoroughly it is tested.
-# tests/test_alias.py covers it; the number would be an artefact of import
-# timing rather than of testing.
 source = ["sillo_graphql"]
 branch = true
 
