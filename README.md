@@ -1,7 +1,7 @@
 # sillo-graphql
 
 Production GraphQL for [Sillo](https://sillo.build). Installs as
-`sillo-graphql`, imports as `sillo.graphql`.
+`sillo-graphql`, imports as `sillo_graphql`.
 
 Strawberry owns the schema. This package owns everything around it — the
 transports, the safety, and the observability.
@@ -13,7 +13,7 @@ pip install sillo-graphql
 ```python
 import strawberry
 from sillo import Depend, HttpContext, SilloApp
-from sillo.graphql import Graph, Limits, field
+from sillo_graphql import Graph, Limits, field
 
 @strawberry.type
 class Query:
@@ -89,7 +89,7 @@ already done the work.
 ### Errors that say what happened, and no more
 
 ```python
-from sillo.graphql import forbidden, not_found
+from sillo_graphql import forbidden, not_found
 
 @field
 async def post(ctx: HttpContext, id: int) -> Post:
@@ -176,7 +176,7 @@ has nothing in common.
 ## Testing
 
 ```python
-from sillo.graphql.testing import GraphClient
+from sillo_graphql.testing import GraphClient
 
 def test_me():
     with GraphClient(app) as gql:
@@ -188,25 +188,6 @@ async def test_prices():
     async with GraphClient(app).subscribe(PRICES, symbol="ACME") as stream:
         assert (await stream.next())["prices"]["last"] == 10
 ```
-
-## The two import paths
-
-`sillo.graphql` and `sillo_graphql` are the same module object, not two copies.
-
-The code lives in the top-level `sillo_graphql` package. A `.pth` shipped with
-the distribution registers a meta-path finder at interpreter startup, which is
-the only hook that runs before an `import sillo.graphql` could fail. Nothing is
-imported by it, and nothing is ever written into the framework's own `sillo/`
-directory — two distributions writing into one package directory goes wrong in
-both directions.
-
-Type checkers do not run import hooks, so they are served separately by the
-PEP 561 **partial** stubs in `sillo-stubs/`. The `partial` marker is what keeps
-them additive: a checker resolves `sillo.graphql` from them and still uses the
-framework's own inline types for the rest of `sillo`.
-
-Versions of `sillo-framework` before 1.0 shipped a `sillo.graphql` of their
-own. Rather than silently shadow it, the alias refuses and says so.
 
 ## Migrating from `sillo.graphql` in the framework
 
@@ -225,10 +206,9 @@ can migrate one resolver at a time.
 
 Python 3.10+, `sillo-framework` 1.0 or newer, `strawberry-graphql`.
 
-1.0 is the floor for two reasons: the resolver bridge is built on the
-context-handler API, and `sillo.graphql` was the framework's own import path
-until then. Against an older framework the alias refuses to load rather than
-shadowing it — but the version pin is what stops you getting that far.
+1.0 is the floor because the resolver bridge is built on the context-handler
+API. Versions before 1.0 also shipped a `sillo.graphql` of their own, which is
+unrelated to this package and is what the table above migrates from.
 
 ## License
 

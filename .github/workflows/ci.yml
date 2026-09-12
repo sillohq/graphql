@@ -5,17 +5,13 @@ on:
     branches: [main]
   pull_request:
 
-# The framework this package extends. `sillo.graphql` is only free to be
-# claimed by a framework that no longer ships one of its own, which is 1.0 —
-# so CI installs it from the 1.0 branch rather than from PyPI. That branch is
-# `main`; it was `v1` until the 1.0 line took the default branch name.
+# The framework this package extends, installed from the 1.0 branch rather
+# than from PyPI: this package tracks `main`, not the last tag cut from it.
+# (`sillo-framework>=1.0` does resolve on PyPI now that 1.0.0a1 is published,
+# but only to that pre-release.)
 #
 # Installed first and explicitly, and this package then installed with
-# `--no-deps`: the declared floor is `sillo-framework>=1.0`, which is true of
-# what the branch *is* and not of what its metadata still calls itself (0.3.1).
-# Resolving against PyPI instead would find no 1.0 at all. Dropping the pin to
-# match the stale version would be the wrong repair — it would let the package
-# install against a framework it cannot run on.
+# `--no-deps`, so the declared floor is not re-resolved against PyPI.
 env:
   FRAMEWORK: "git+https://github.com/sillohq/core.git@main"
 
@@ -35,7 +31,7 @@ jobs:
           pip install "$FRAMEWORK" strawberry-graphql
 
       - name: Lint
-        run: ruff check sillo_graphql tests _sillo_graphql_bootstrap.py
+        run: ruff check sillo_graphql tests
 
       - name: Format
         run: ruff format --check sillo_graphql tests
@@ -68,16 +64,15 @@ jobs:
       - name: Test
         run: pytest --cov --cov-report=term-missing
 
-  alias:
-    name: sillo.graphql, from a built wheel
+  wheel:
+    name: sillo_graphql, from a built wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # The newest supported interpreter. The matrix already exercises the
-      # alias on every version through the editable install, which carries the
-      # same .pth -- so the one place worth spending a separate job is the
-      # wheel path on the interpreter most likely to have changed underneath
-      # site-packages.
+      # package on every version through the editable install, so the one place
+      # worth a separate job is the wheel path on the interpreter most likely
+      # to have changed underneath site-packages.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -87,10 +82,11 @@ jobs:
           python -m pip install --upgrade pip build
           python -m build --wheel -o dist .
 
-      # The collision this layout exists to avoid: two distributions writing
-      # into one package directory. Checked on the artefact, not on a install,
-      # because an install can hide it behind whatever is already there.
-      - name: The wheel must write nothing into sillo/
+      # Two distributions writing into one package directory goes wrong in both
+      # directions, so the wheel must add a top-level `sillo_graphql` and
+      # nothing else. Checked on the artefact, not on an install, because an
+      # install can hide it behind whatever is already there.
+      - name: The wheel ships sillo_graphql only
         run: |
           python - <<'PY'
           import glob
@@ -99,18 +95,15 @@ jobs:
           names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
           intruders = [name for name in names if name.startswith("sillo/")]
           assert not intruders, f"wheel writes into sillo/: {intruders}"
+          strays = [n for n in names if n.endswith(".pth") or n.startswith("sillo-stubs/")]
+          assert not strays, f"alias machinery is back in the wheel: {strays}"
+          assert "sillo_graphql/py.typed" in names, "the PEP 561 marker is missing"
           print("\n".join(sorted(names)))
           PY
 
-      # The `.pth` runs at interpreter startup and only for a real install, so
-      # the alias is exercised against the wheel rather than the checkout.
-      #
-      # Which guarantee applies depends on the framework installed. Against one
-      # that no longer ships its own `sillo.graphql`, the alias must resolve.
-      # Against one that still does, the alias must *refuse* rather than
-      # silently shadow it. Both are contracts; the job asserts whichever is in
-      # force, and flips on its own when the framework drops the module.
-      - name: The alias resolves, or refuses — never shadows
+      # Against a real install, not the checkout: an editable install can
+      # import what the wheel does not actually ship.
+      - name: sillo_graphql imports, and sillo.graphql does not
         run: |
           python -m venv /tmp/v
           /tmp/v/bin/pip install -q "$FRAMEWORK" strawberry-graphql mypy
@@ -119,36 +112,28 @@ jobs:
           import os
 
           import sillo
+          import sillo_graphql  # noqa: F401
 
           package = os.path.dirname(sillo.__file__)
-          shipped = "graphql" in os.listdir(package)
+          assert "graphql" not in os.listdir(package), "something wrote into sillo/"
 
-          if shipped:
-              try:
-                  import sillo.graphql  # noqa: F401
-              except ImportError as exc:
-                  assert "ships its own" in str(exc), exc
-                  print("framework still ships sillo.graphql; the alias refused")
-              else:
-                  raise AssertionError("the alias shadowed the framework's module")
+          # The package used to ship a .pth aliasing `sillo.graphql` onto it.
+          # That is gone, and the framework has not shipped a module of that
+          # name since 1.0, so the import must simply fail.
+          try:
+              import sillo.graphql  # noqa: F401
+          except ImportError:
+              print("sillo_graphql imports; sillo.graphql does not resolve")
           else:
-              import sillo.graphql
-              import sillo.graphql.limits
-              import sillo_graphql
-
-              assert sillo.graphql is sillo_graphql, "two modules, not one"
-              assert sillo.graphql.limits is sillo_graphql.limits, "submodule diverged"
-              print("alias ok, sillo/ untouched")
-
-          import sillo_graphql  # noqa: F401  -- always importable either way
+              raise AssertionError("sillo.graphql still resolves")
           PY
 
-      # PEP 561 partial stubs: a checker must resolve `sillo.graphql` from
-      # them *and* still use the framework's own inline types for the rest.
-      - name: Type checkers resolve both
+      # Types come from the package's own annotations plus py.typed now, not
+      # from a separate set of stubs that had to be kept in step with them.
+      - name: Type checkers resolve the package
         run: |
           cat > /tmp/check.py <<'PY'
-          from sillo.graphql import Graph, Limits, not_found
+          from sillo_graphql import Graph, Limits, not_found
 
           limits: Limits = Limits(depth=3)
           error = not_found("gone")

@@ -2,14 +2,14 @@
 
 Installs as ``sillo-graphql`` and imports either way::
 
-    from sillo.graphql import Graph, field    # reads as part of the framework
+    from sillo_graphql import Graph, field    # reads as part of the framework
     from sillo_graphql import Graph, field    # where the code actually is
 
 Strawberry owns the schema. This package owns everything around it: the
 transports, the safety, and the observability.
 
     from sillo import Depend, HttpContext, SilloApp
-    from sillo.graphql import Graph, Limits, field
+    from sillo_graphql import Graph, Limits, field
 
     @strawberry.type
     class Query:
