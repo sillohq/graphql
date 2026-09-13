@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0a1] - 2026-09-13
+
+First alpha, released alongside `sillo-framework` 1.0.0a1. Install with
+`pip install --pre sillo-graphql==1.0.0a1`.
+
+An alpha: this is what 1.0 is expected to look like, but the API is not frozen
+yet and may still change before `1.0.0`.
+
 ### Removed
 
 - **The `sillo.graphql` import alias.** `sillo_graphql` is now the only import

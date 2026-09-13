@@ -58,7 +58,7 @@ from sillo_graphql.policy import (
 from sillo_graphql.resolvers import ResolverError, field, mutation, subscription
 from sillo_graphql.tracing import Metrics, OperationLog
 
-__version__ = "0.1.0"
+__version__ = "1.0.0a1"
 
 __all__ = [
     "IDE",

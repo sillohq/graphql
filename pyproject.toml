@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sillo-graphql"
-version = "0.1.0"
+version = "1.0.0a1"
 description = "Production GraphQL for Sillo — sillo-style resolvers with DI, subscriptions, cost limits, persisted operations and batching."
 readme = "README.md"
 requires-python = ">=3.10"
