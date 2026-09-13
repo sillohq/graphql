@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sillo-graphql"
-version = "1.0.0a1"
+version = "1.0.0a2"
 description = "Production GraphQL for Sillo — sillo-style resolvers with DI, subscriptions, cost limits, persisted operations and batching."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,7 +36,7 @@ classifiers = [
 # honestly is what makes pip refuse the combination up front rather than
 # leaving it to fail on the first resolver.
 dependencies = [
-    "sillo-framework>=1.0",
+    "sillo-framework>=1.0.0a1",
     "strawberry-graphql>=0.219.0",
 ]
 
