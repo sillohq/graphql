@@ -146,7 +146,8 @@ class GraphContext(typing.Mapping[str, typing.Any]):
         #: Filled in by cost analysis, and reported in ``extensions``.
         self.cost: int | None = None
         #: Shared by every ``Depend`` in this operation, so two resolvers that
-        #: both ask for ``Depend(get_db)`` are handed one session rather than
+        #: both ask for ``Depend(get_db, get_context=True)`` are handed one
+        #: session rather than
         #: opening two against the same request.
         self.dependency_cache: dict[typing.Any, typing.Any] = {}
         #: When this operation began, on the monotonic clock. Read by the

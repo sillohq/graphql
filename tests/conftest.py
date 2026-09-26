@@ -44,7 +44,9 @@ class Node:
 @strawberry.type
 class Query:
     @field
-    async def me(ctx: HttpContext, db=Depend(get_db), id: int = 1) -> str:
+    async def me(
+        ctx: HttpContext, db=Depend(get_db, get_context=True), id: int = 1
+    ) -> str:
         name = db["users"].get(id)
         if name is None:
             raise not_found(f"no user {id}")

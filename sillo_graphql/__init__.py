@@ -14,7 +14,7 @@ transports, the safety, and the observability.
     @strawberry.type
     class Query:
         @field
-        async def me(ctx: HttpContext, db=Depend(get_db)) -> User:
+        async def me(ctx: HttpContext, db=Depend(get_db, get_context=True)) -> User:
             return await db.users.get(ctx.user.id)
 
     app = SilloApp()
@@ -58,7 +58,7 @@ from sillo_graphql.policy import (
 from sillo_graphql.resolvers import ResolverError, field, mutation, subscription
 from sillo_graphql.tracing import Metrics, OperationLog
 
-__version__ = "1.0.0a2"
+__version__ = "1.0.0"
 
 __all__ = [
     "IDE",

@@ -18,7 +18,7 @@ from sillo_graphql import Graph, Limits, field
 @strawberry.type
 class Query:
     @field
-    async def me(ctx: HttpContext, db=Depend(get_db)) -> User:
+    async def me(ctx: HttpContext, db=Depend(get_db, get_context=True)) -> User:
         return await db.users.get(ctx.user.id)
 
 app = SilloApp()
@@ -32,7 +32,7 @@ needs. So does a resolver here:
 
 ```python
 @field
-async def posts(ctx: HttpContext, db=Depend(get_db), limit: int = 10) -> list[Post]:
+async def posts(ctx: HttpContext, db=Depend(get_db, get_context=True), limit: int = 10) -> list[Post]:
     return await db.posts.recent(limit)
 ```
 
@@ -42,7 +42,7 @@ field takes exactly one argument, `limit`.
 
 Dependencies are resolved by the framework's own solver, with the framework's
 own pre-flattened execution plan — two resolvers in one operation that both
-ask for `Depend(get_db)` are handed the same session.
+ask for `Depend(get_db, get_context=True)` are handed the same session.
 
 ## Configuration
 

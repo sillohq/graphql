@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-26
+
+Stable Sillo 1.0 GraphQL integration release.
+
 ## [1.0.0a1] - 2026-09-13
 
 First alpha, released alongside `sillo-framework` 1.0.0a1. Install with

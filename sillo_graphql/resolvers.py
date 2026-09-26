@@ -4,7 +4,7 @@ A route handler in ``sillo`` takes the context first and declares whatever else
 it needs::
 
     @app.get("/me")
-    async def me(ctx: HttpContext, db=Depend(get_db)):
+    async def me(ctx: HttpContext, db=Depend(get_db, get_context=True)):
         ...
 
 A resolver here is the same thing::
@@ -12,7 +12,7 @@ A resolver here is the same thing::
     @strawberry.type
     class Query:
         @field
-        async def me(ctx: HttpContext, db=Depend(get_db)) -> User:
+        async def me(ctx: HttpContext, db=Depend(get_db, get_context=True)) -> User:
             ...
 
 The rule is one sentence: **``ctx`` and anything defaulted to ``Depend`` are
@@ -190,11 +190,13 @@ def _shared(dependant: typing.Any) -> typing.Any:
     """Make every dependency in *dependant* cacheable for one operation.
 
     The framework only assigns a cache key to a dependency that has
-    dependencies of its own, so ``Depend(get_db)`` is resolved once per
+    dependencies of its own, so ``Depend(get_db, get_context=True)`` is
+    resolved once per
     parameter rather than once per request. In a route that is a wart — the
     handler is called once, so it happens at most a couple of times. In a
     GraphQL operation it is pathological: twenty fields each declaring
-    ``Depend(get_db)`` would open twenty sessions to answer one query.
+    ``Depend(get_db, get_context=True)`` would open twenty sessions to answer
+    one query.
 
     So the missing keys are filled in, and the framework's own cache — held on
     the ``GraphContext`` and dropped with it — does the rest. Reaching into the
@@ -220,7 +222,8 @@ async def _solve(
     """Resolve this resolver's dependencies against the operation's context.
 
     The dependency cache lives on the ``GraphContext``, so two resolvers in one
-    operation that both ask for ``Depend(get_db)`` are handed the same session
+    operation that both ask for ``Depend(get_db, get_context=True)`` are handed
+    the same session
     — which is the whole point of a request-scoped dependency.
     """
     from sillo.core.dependencies.base import solve_dependencies

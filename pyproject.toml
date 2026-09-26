@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sillo-graphql"
-version = "1.0.0a2"
+version = "1.0.0"
 description = "Production GraphQL for Sillo — sillo-style resolvers with DI, subscriptions, cost limits, persisted operations and batching."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,7 @@ keywords = [
     "dataloader", "persisted-queries", "api",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
@@ -36,16 +36,9 @@ classifiers = [
 # honestly is what makes pip refuse the combination up front rather than
 # leaving it to fail on the first resolver.
 dependencies = [
-    "sillo-framework>=1.0.0a1",
+    "sillo-framework>=1.0.0",
     "strawberry-graphql>=0.219.0",
 ]
-
-# `>=1.0` cannot resolve against PyPI yet (the branch that is 1.0 still calls
-# itself 0.3.x). uv-based dev takes it from that branch; dev-only, never
-# written into the wheel. Drop once 1.0 publishes. CI installs it the same
-# way via the FRAMEWORK env var.
-[tool.uv.sources]
-sillo-framework = { git = "https://github.com/sillohq/core.git", branch = "main" }
 
 [project.urls]
 Homepage = "https://sillo.build"

@@ -50,7 +50,7 @@ class TestSignature:
         @strawberry.type
         class Query:
             @field
-            def who(value=Depend(dependency)) -> str:
+            def who(value=Depend(dependency, get_context=True)) -> str:
                 return value
 
         assert "who: String!" in strawberry.Schema(query=Query).as_str()
@@ -156,7 +156,7 @@ class TestExecution:
         @strawberry.type
         class Query:
             @field
-            def value(thing=Depend(dependency)) -> str:
+            def value(thing=Depend(dependency, get_context=True)) -> str:
                 return thing
 
         schema = strawberry.Schema(query=Query)
@@ -173,11 +173,11 @@ class TestExecution:
         @strawberry.type
         class Query:
             @field
-            def a(thing=Depend(dependency)) -> int:
+            def a(thing=Depend(dependency, get_context=True)) -> int:
                 return thing
 
             @field
-            def b(thing=Depend(dependency)) -> int:
+            def b(thing=Depend(dependency, get_context=True)) -> int:
                 return thing
 
         schema = strawberry.Schema(query=Query)
@@ -200,7 +200,7 @@ class TestExecution:
         @strawberry.type
         class Query:
             @field
-            def value(thing=Depend(dependency)) -> str:
+            def value(thing=Depend(dependency, get_context=True)) -> str:
                 return thing
 
         schema = strawberry.Schema(query=Query)
@@ -393,7 +393,9 @@ class TestSubscription:
         @strawberry.type
         class Subscription:
             @subscription
-            async def one(thing=Depend(dependency)) -> typing.AsyncGenerator[str, None]:
+            async def one(
+                thing=Depend(dependency, get_context=True),
+            ) -> typing.AsyncGenerator[str, None]:
                 yield thing
 
         schema = strawberry.Schema(query=Query, subscription=Subscription)
@@ -444,7 +446,7 @@ class TestSyncDependencies:
         @strawberry.type
         class Query:
             @field
-            def value(thing=Depend(dependency)) -> str:
+            def value(thing=Depend(dependency, get_context=True)) -> str:
                 return thing
 
         schema = strawberry.Schema(query=Query)
